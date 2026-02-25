@@ -4,7 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-TaskType = Literal["classification", "segmentation"]
+TaskType = str
+BaseTaskType = Literal["classification", "segmentation"]
 RegistryStage = Literal["dev", "release"]
 
 
@@ -19,9 +20,9 @@ class StopRunRequest(BaseModel):
 
 class SelectBestRequest(BaseModel):
     taskType: TaskType
-    metric: str
-    mode: Literal["max", "min"] = "max"
-    experimentName: str
+    metric: str | None = None
+    mode: Literal["max", "min"] | None = None
+    experimentName: str | None = None
     modelName: str | None = None
     registerToMlflow: bool = True
     artifactPath: str = "model"
@@ -65,7 +66,7 @@ class StopMlflowServingRequest(BaseModel):
 class LoadLocalModelRequest(BaseModel):
     alias: str
     modelPath: str
-    taskType: TaskType | None = None
+    taskType: BaseTaskType | None = None
     numClasses: int | None = None
 
 

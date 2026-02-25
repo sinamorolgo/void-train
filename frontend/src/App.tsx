@@ -17,17 +17,10 @@ interface Notice {
   timestamp: number
 }
 
-function normalizeMetricByTask(taskType: TaskType): string {
-  return taskType === 'classification' ? 'val_accuracy' : 'val_iou'
-}
-
 export default function App() {
   const queryClient = useQueryClient()
-  const [selectedTask, setSelectedTask] = useState<TaskType>('classification')
-  const [formByTask, setFormByTask] = useState<Record<TaskType, Record<string, unknown>>>({
-    classification: {},
-    segmentation: {},
-  })
+  const [selectedTask, setSelectedTask] = useState<TaskType>('')
+  const [formByTask, setFormByTask] = useState<Record<string, Record<string, unknown>>>({})
   const [notices, setNotices] = useState<Notice[]>([])
 
   const pushNotice = (level: Notice['level'], message: string, detail?: string) => {
@@ -37,24 +30,29 @@ export default function App() {
   const schemasQuery = useQuery({ queryKey: ['schemas'], queryFn: api.getSchemas })
 
   useEffect(() => {
-    if (!schemasQuery.data) return
+    if (!schemasQuery.data || schemasQuery.data.length === 0) return
 
-    const next: Record<TaskType, Record<string, unknown>> = {
-      classification: formByTask.classification,
-      segmentation: formByTask.segmentation,
-    }
-
-    for (const schema of schemasQuery.data) {
-      if (Object.keys(next[schema.taskType]).length === 0) {
-        next[schema.taskType] = buildDefaults(schema)
+    setFormByTask((prev) => {
+      const next = { ...prev }
+      for (const schema of schemasQuery.data) {
+        if (!next[schema.taskType] || Object.keys(next[schema.taskType]).length === 0) {
+          next[schema.taskType] = buildDefaults(schema)
+        }
       }
-    }
+      return next
+    })
 
-    setFormByTask(next)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setSelectedTask((prev) => {
+      const hasPrev = prev && schemasQuery.data.some((schema) => schema.taskType === prev)
+      return hasPrev ? prev : schemasQuery.data[0].taskType
+    })
   }, [schemasQuery.data])
 
-  const selectedValues = formByTask[selectedTask] ?? {}
+  const selectedSchema = useMemo(
+    () => (schemasQuery.data ?? []).find((schema) => schema.taskType === selectedTask),
+    [schemasQuery.data, selectedTask],
+  )
+  const selectedValues = selectedTask ? formByTask[selectedTask] ?? {} : {}
 
   const runsQuery = useQuery({
     queryKey: ['runs'],
@@ -65,6 +63,7 @@ export default function App() {
   const mlflowRunsQuery = useQuery({
     queryKey: ['mlflow-runs', selectedTask],
     queryFn: () => api.getMlflowRuns(selectedTask),
+    enabled: Boolean(selectedTask),
     refetchInterval: 3000,
   })
 
@@ -153,7 +152,7 @@ export default function App() {
           </article>
           <article>
             <span>Task</span>
-            <strong>{selectedTask}</strong>
+            <strong>{(selectedSchema?.title ?? selectedTask) || '-'}</strong>
           </article>
         </div>
       </header>
@@ -193,18 +192,16 @@ export default function App() {
         <MlflowPanel
           key={selectedTask}
           taskType={selectedTask}
+          taskTitle={selectedSchema?.title ?? selectedTask}
           runs={mlflowRunsQuery.data ?? []}
+          defaultMetric={selectedSchema?.mlflow.metric ?? 'val_accuracy'}
+          defaultMode={selectedSchema?.mlflow.mode ?? 'max'}
+          defaultModelName={selectedSchema?.mlflow.modelName ?? `${selectedTask}-best-model`}
+          defaultArtifactPath={selectedSchema?.mlflow.artifactPath ?? 'model'}
           defaultTrackingUri={String(selectedValues.mlflow_tracking_uri ?? 'http://127.0.0.1:5001')}
           defaultExperiment={String(selectedValues.mlflow_experiment ?? 'void-train-manager')}
           busy={isBusy}
-          onSelectBest={(payload) =>
-            mlflowActionMutation.mutate(() =>
-              api.selectBest({
-                ...payload,
-                metric: payload.metric || normalizeMetricByTask(payload.taskType),
-              }),
-            )
-          }
+          onSelectBest={(payload) => mlflowActionMutation.mutate(() => api.selectBest(payload))}
           onMigrateTensorBoard={(payload) => mlflowActionMutation.mutate(() => api.migrateTensorBoard(payload))}
         />
 

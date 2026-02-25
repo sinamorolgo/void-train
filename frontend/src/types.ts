@@ -1,4 +1,4 @@
-export type TaskType = 'classification' | 'segmentation'
+export type TaskType = string
 
 export type FieldType = 'text' | 'number' | 'boolean' | 'select'
 
@@ -19,7 +19,20 @@ export interface ConfigField {
 
 export interface TaskSchema {
   taskType: TaskType
+  baseTaskType: 'classification' | 'segmentation'
   title: string
+  description?: string
+  runner: {
+    startMethod: 'python_script' | 'python_module'
+    target: string
+    targetEnvVar?: string | null
+  }
+  mlflow: {
+    metric: string
+    mode: 'max' | 'min'
+    modelName: string
+    artifactPath: string
+  }
   fields: ConfigField[]
 }
 

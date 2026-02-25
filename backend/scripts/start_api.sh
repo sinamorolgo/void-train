@@ -10,7 +10,7 @@ PORT="${APP_PORT:-8008}"
 
 if [[ ! -x "$VENV_PYTHON" ]]; then
   echo "Python executable not found at $VENV_PYTHON"
-  echo "Run: uv venv .venv --python 3.11 && uv pip install --python .venv/bin/python -r backend/requirements.txt"
+  echo "Run: uv venv .venv --python 3.11 && uv sync --python .venv/bin/python --only-group backend --no-default-groups"
   exit 1
 fi
 

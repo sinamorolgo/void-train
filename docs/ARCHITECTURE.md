@@ -2,11 +2,17 @@
 
 ## Backend (`backend/`)
 
+- `config/training_catalog.yaml`
+  - UI + backend 공용 task 카탈로그 단일 소스
+  - task별 시작 방법, args/UI 필드 구성, MLflow 기본값 관리
+- `app/core/task_catalog.py`
+  - YAML 카탈로그 로드/검증
+  - task 정의를 API 스키마/런타임 실행 설정으로 변환
 - `app/core/train_config.py`
-  - 단일 소스 dataclass 정의 (공통 + task별)
-  - API 스키마 자동 생성 + CLI arg 변환
+  - task별 dataclass 템플릿/타입 검증
+  - CLI arg 변환/파싱 기본 기능
 - `app/services/run_manager.py`
-  - subprocess로 학습 스크립트 실행
+  - YAML 카탈로그 기준 subprocess 실행
   - stdout의 `VTM_PROGRESS::` / `VTM_RUN_META::` 파싱
   - 실행 상태/로그/진행률 추적
 - `app/services/mlflow_service.py`
@@ -54,7 +60,7 @@
 
 ## Why this structure
 
-- dataclass 하나로 `CLI 인자`, `웹 폼`, `런타임 설정`을 일원화
-- 분류/세그 인자 차이를 task-specific dataclass로 캡슐화
+- YAML 카탈로그 하나로 `학습 시작 방식`, `웹 폼`, `런타임 기본값`을 일원화
+- dataclass는 타입 안정성을 위한 템플릿으로 유지하고, UI/실행 정책은 YAML에서 관리
 - MLflow를 중심으로 하되 TensorBoard existing workflow를 끊지 않고 점진 전환 가능
 - 모델 서빙은 MLflow 우선 + 운영 fallback(FTP/Local)까지 확보

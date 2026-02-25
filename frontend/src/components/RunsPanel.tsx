@@ -22,7 +22,11 @@ export function RunsPanel({ runs, onStop, isStopping }: RunsPanelProps) {
 
         {runs.map((run) => {
           const percent = progressPercent(run)
-          const metric = run.taskType === 'classification' ? run.progress.val_accuracy : run.progress.val_iou
+          const metric =
+            run.progress.val_accuracy ??
+            run.progress.val_iou ??
+            run.progress.best_val_accuracy ??
+            run.progress.best_val_iou
 
           return (
             <article key={run.runId} className="run-card">

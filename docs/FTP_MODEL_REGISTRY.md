@@ -102,8 +102,27 @@ curl -X POST http://127.0.0.1:8008/api/ftp-server/stop \
   --password 'mlops123!' \
   --stage release \
   --model-name classification-best-model \
-  --version latest \
-  --destination-dir ./downloads
+  --version latest
+```
+
+Python 코드에서 바로 쓰는 권장 방식(싱글톤 + dataclass config):
+
+```python
+from scripts.ftp_model_client import FtpModelClientConfig, get_ftp_model_registry_client
+
+config = FtpModelClientConfig(
+    host="127.0.0.1",
+    port=2121,
+    username="mlops",
+    password="mlops123!",
+)
+
+client = get_ftp_model_registry_client(config)
+bundle = client.get("release", "classification-best-model", "latest")
+
+# torch.hub cache 하위 경로에 저장/압축해제됨
+print(bundle.preferred_weight_path)
+# torch.load(bundle.preferred_weight_path, map_location="cpu")
 ```
 
 ## 참고

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.settings import get_settings
+from app.core.task_catalog import RunnerConfig, TaskDefinition, get_task_catalog
 from app.core.train_config import (
     PROGRESS_PREFIX,
     RUN_META_PREFIX,
@@ -35,7 +36,7 @@ def _normalize_run_name(run_name: str) -> str:
 @dataclass
 class RunRecord:
     run_id: str
-    task_type: TaskType
+    task_type: str
     status: str
     command: list[str]
     config: dict[str, Any]
@@ -73,16 +74,35 @@ class RunManager:
         self._active: dict[str, RunRecord] = {}
         self._history: dict[str, RunRecord] = {}
 
-    def _task_script(self, task_type: TaskType) -> Path:
-        return (
-            self._settings.classification_script
-            if task_type == "classification"
-            else self._settings.segmentation_script
-        )
+    def _resolve_command(self, task: TaskDefinition, cli_args: list[str]) -> list[str]:
+        target = task.runner.resolve_target()
+        if task.runner.start_method == "python_module":
+            return [sys.executable, "-m", target] + cli_args
 
-    def _prepare_config_paths(self, raw_config: dict[str, Any], task_type: TaskType) -> dict[str, Any]:
+        script_path = Path(target).expanduser()
+        if not script_path.is_absolute():
+            script_path = (self._settings.project_root / script_path).resolve()
+        if not script_path.exists():
+            raise FileNotFoundError(f"Training script not found: {script_path}")
+        return [sys.executable, str(script_path)] + cli_args
+
+    def _resolve_cwd(self, runner: RunnerConfig) -> str:
+        if not runner.cwd:
+            return str(self._settings.backend_root)
+        cwd_path = Path(runner.cwd).expanduser()
+        if not cwd_path.is_absolute():
+            cwd_path = (self._settings.project_root / cwd_path).resolve()
+        return str(cwd_path)
+
+    def _prepare_config_paths(
+        self,
+        raw_config: dict[str, Any],
+        *,
+        task_alias: str,
+        base_task_type: TaskType,
+    ) -> dict[str, Any]:
         updated = dict(raw_config)
-        task_prefix = "clf" if task_type == "classification" else "seg"
+        task_prefix = "clf" if base_task_type == "classification" else "seg"
         run_slug = _normalize_run_name(str(updated.get("run_name", "run")))
 
         output_root_raw = Path(str(updated.get("output_root", "./outputs"))).expanduser()
@@ -91,7 +111,7 @@ class RunManager:
             if output_root_raw.is_absolute()
             else (self._settings.project_root / output_root_raw).resolve()
         )
-        run_dir = output_root / task_type / f"{task_prefix}-{run_slug}-{uuid.uuid4().hex[:8]}"
+        run_dir = output_root / task_alias / f"{task_prefix}-{run_slug}-{uuid.uuid4().hex[:8]}"
 
         checkpoint_dir = Path(str(updated.get("checkpoint_dir", run_dir / "checkpoints"))).expanduser()
         tensorboard_dir = Path(str(updated.get("tensorboard_dir", run_dir / "tensorboard"))).expanduser()
@@ -124,16 +144,22 @@ class RunManager:
 
         return updated
 
-    def start_run(self, task_type: TaskType, raw_config: dict[str, Any]) -> dict[str, Any]:
-        script_path = self._task_script(task_type)
-        if not script_path.exists():
-            raise FileNotFoundError(f"Training script not found: {script_path}")
+    def start_run(self, task_type: str, raw_config: dict[str, Any]) -> dict[str, Any]:
+        task_catalog = get_task_catalog()
+        task = task_catalog.get_task(task_type)
 
-        prepared_values = self._prepare_config_paths(raw_config, task_type)
-        config = build_config(task_type, prepared_values)
+        merged_values = dict(task.default_field_values())
+        merged_values.update(raw_config)
+
+        prepared_values = self._prepare_config_paths(
+            merged_values,
+            task_alias=task.task_type,
+            base_task_type=task.base_task_type,
+        )
+        config = build_config(task.base_task_type, prepared_values)
         config_data = config_to_dict(config)
 
-        command = [sys.executable, str(script_path)] + config_to_cli_args(config)
+        command = self._resolve_command(task, config_to_cli_args(config))
 
         env = build_pythonpath_env(prepend_path=str(self._settings.backend_root))
         env["PYTHONUNBUFFERED"] = "1"
@@ -142,7 +168,7 @@ class RunManager:
 
         process = subprocess.Popen(
             command,
-            cwd=str(self._settings.backend_root),
+            cwd=self._resolve_cwd(task.runner),
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

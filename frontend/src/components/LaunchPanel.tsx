@@ -31,10 +31,14 @@ export function LaunchPanel({
     [currentSchema],
   )
 
+  const runnerText = currentSchema
+    ? `${currentSchema.runner.startMethod} · ${currentSchema.runner.target}`
+    : 'Task schema not loaded'
+
   return (
     <SectionCard
       title="Run Launcher"
-      subtitle="Dataclass 기반 설정으로 분류/세그 학습을 통합 실행합니다."
+      subtitle={`YAML 카탈로그 기반 설정으로 학습 실행을 통합 관리합니다. (${runnerText})`}
       action={
         <button type="button" className="primary" onClick={onLaunch} disabled={isLaunching || !currentSchema}>
           {isLaunching ? 'Launching...' : 'Start Training'}

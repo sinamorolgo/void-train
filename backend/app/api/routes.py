@@ -20,6 +20,7 @@ from app.api.schemas import (
     StopFtpServerRequest,
     StopMlflowServingRequest,
 )
+from app.core.task_catalog import TaskDefinition, get_task_catalog
 from app.core.settings import get_settings
 from app.core.train_config import TaskType, dataclass_schema, get_metric_for_task
 from app.services.ftp_model_registry import StageType, ftp_registry
@@ -56,23 +57,71 @@ def _validate_stage(stage: str) -> StageType:
     return cast(StageType, stage)
 
 
+def _task_definition(task_type: str) -> TaskDefinition:
+    try:
+        return get_task_catalog().get_task(task_type)
+    except KeyError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+def _build_task_schema(task: TaskDefinition) -> dict[str, Any]:
+    schema = dataclass_schema(task.base_task_type)
+    field_map = {field["name"]: dict(field) for field in schema["fields"]}
+
+    for field_name, patch in task.field_overrides.items():
+        if field_name not in field_map:
+            continue
+        field_data = field_map[field_name]
+        for key in {"type", "required", "default", "label", "description", "group", "choices", "min", "max", "step"}:
+            if key in patch:
+                field_data[key] = patch[key]
+
+    filtered_items = [
+        field
+        for name, field in field_map.items()
+        if name not in task.hidden_fields
+    ]
+
+    order_index = {name: idx for idx, name in enumerate(task.field_order)}
+    filtered_items.sort(key=lambda item: (order_index.get(item["name"], 10_000), item["name"]))
+
+    return {
+        "taskType": task.task_type,
+        "baseTaskType": task.base_task_type,
+        "title": task.title,
+        "description": task.description,
+        "runner": {
+            "startMethod": task.runner.start_method,
+            "target": task.runner.target,
+            "targetEnvVar": task.runner.target_env_var,
+        },
+        "mlflow": {
+            "metric": task.mlflow.metric,
+            "mode": task.mlflow.mode,
+            "modelName": task.mlflow.model_name,
+            "artifactPath": task.mlflow.artifact_path,
+        },
+        "fields": filtered_items,
+    }
+
+
 @router.get("/health")
 def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "defaultMlflowTrackingUri": settings.default_mlflow_tracking_uri,
         "defaultMlflowExperiment": settings.default_mlflow_experiment,
+        "trainingCatalogPath": str(settings.training_catalog_path),
     }
 
 
 @router.get("/config-schemas")
 def config_schemas() -> dict[str, Any]:
-    return {
-        "items": [
-            dataclass_schema("classification"),
-            dataclass_schema("segmentation"),
-        ]
-    }
+    def _run() -> dict[str, Any]:
+        catalog = get_task_catalog()
+        return {"items": [_build_task_schema(task) for task in catalog.list_tasks()]}
+
+    return _as_bad_request(_run)
 
 
 @router.post("/runs/start")
@@ -105,14 +154,18 @@ def stop_run(run_id: str) -> dict[str, Any]:
 def get_mlflow_runs(
     trackingUri: str | None = None,
     experimentName: str | None = None,
-    taskType: TaskType | None = None,
+    taskType: str | None = None,
     limit: int = 30,
 ) -> dict[str, Any]:
     def _run() -> dict[str, Any]:
+        resolved_task_type: TaskType | None = None
+        if taskType:
+            resolved_task_type = _task_definition(taskType).base_task_type
+
         runs = list_runs(
             tracking_uri=trackingUri or settings.default_mlflow_tracking_uri,
             experiment_name=experimentName or settings.default_mlflow_experiment,
-            task_type=taskType,
+            task_type=resolved_task_type,
             limit=limit,
         )
         return {"items": runs}
@@ -122,7 +175,8 @@ def get_mlflow_runs(
 
 @router.post("/mlflow/select-best")
 def pick_best_run(payload: SelectBestRequest) -> dict[str, Any]:
-    metric_name = payload.metric or get_metric_for_task(payload.taskType)
+    task = _task_definition(payload.taskType)
+    metric_name = payload.metric or task.mlflow.metric or get_metric_for_task(task.base_task_type)
 
     tracking_uri = settings.default_mlflow_tracking_uri
     experiment_name = payload.experimentName or settings.default_mlflow_experiment
@@ -132,8 +186,8 @@ def pick_best_run(payload: SelectBestRequest) -> dict[str, Any]:
             tracking_uri=tracking_uri,
             experiment_name=experiment_name,
             metric_name=metric_name,
-            mode=payload.mode,
-            task_type=payload.taskType,
+            mode=payload.mode or task.mlflow.mode,
+            task_type=task.base_task_type,
         )
 
         response: dict[str, Any] = {
@@ -145,12 +199,12 @@ def pick_best_run(payload: SelectBestRequest) -> dict[str, Any]:
         }
 
         if payload.registerToMlflow:
-            model_name = payload.modelName or f"{payload.taskType}-best-model"
+            model_name = payload.modelName or task.mlflow.model_name or f"{payload.taskType}-best-model"
             response["registeredModel"] = register_model(
                 tracking_uri=tracking_uri,
                 run_id=best.run_id,
                 model_name=model_name,
-                artifact_path=payload.artifactPath,
+                artifact_path=payload.artifactPath or task.mlflow.artifact_path,
             )
 
         return response

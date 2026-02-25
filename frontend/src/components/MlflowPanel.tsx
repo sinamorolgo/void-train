@@ -5,7 +5,12 @@ import { SectionCard } from './SectionCard'
 
 interface MlflowPanelProps {
   taskType: TaskType
+  taskTitle: string
   runs: MlflowRunItem[]
+  defaultMetric: string
+  defaultMode: 'max' | 'min'
+  defaultModelName: string
+  defaultArtifactPath: string
   defaultTrackingUri: string
   defaultExperiment: string
   busy: boolean
@@ -28,17 +33,22 @@ interface MlflowPanelProps {
 
 export function MlflowPanel({
   taskType,
+  taskTitle,
   runs,
+  defaultMetric,
+  defaultMode,
+  defaultModelName,
+  defaultArtifactPath,
   defaultTrackingUri,
   defaultExperiment,
   busy,
   onSelectBest,
   onMigrateTensorBoard,
 }: MlflowPanelProps) {
-  const [metric, setMetric] = useState(taskType === 'classification' ? 'val_accuracy' : 'val_iou')
-  const [mode, setMode] = useState<'max' | 'min'>('max')
-  const [modelName, setModelName] = useState(`${taskType}-best-model`)
-  const [artifactPath, setArtifactPath] = useState('model')
+  const [metric, setMetric] = useState(defaultMetric)
+  const [mode, setMode] = useState<'max' | 'min'>(defaultMode)
+  const [modelName, setModelName] = useState(defaultModelName)
+  const [artifactPath, setArtifactPath] = useState(defaultArtifactPath)
 
   const [tbDir, setTbDir] = useState('./outputs/tensorboard')
   const [trackingUri, setTrackingUri] = useState(defaultTrackingUri)
@@ -60,7 +70,7 @@ export function MlflowPanel({
                 autoComplete="off"
                 value={metric}
                 onChange={(event) => setMetric(event.target.value)}
-                placeholder="val_accuracy"
+                placeholder={defaultMetric}
               />
             </label>
             <label>
@@ -170,7 +180,7 @@ export function MlflowPanel({
       </div>
 
       <div className="mini-card table-card">
-        <h3>Recent MLflow Runs ({taskType})</h3>
+        <h3>Recent MLflow Runs ({taskTitle})</h3>
         <table>
           <thead>
             <tr>
@@ -189,7 +199,7 @@ export function MlflowPanel({
               </tr>
             ) : (
               rows.map((run) => {
-                const keyMetric = taskType === 'classification' ? run.metrics.val_accuracy : run.metrics.val_iou
+                const keyMetric = run.metrics[defaultMetric]
                 return (
                   <tr key={run.runId}>
                     <td>{run.runName}</td>

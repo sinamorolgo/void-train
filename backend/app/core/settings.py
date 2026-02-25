@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -21,6 +23,7 @@ class Settings:
     ftp_default_port: int
     ftp_default_username: str
     ftp_default_password: str
+    training_catalog_path: Path
     runs_log_tail: int
 
     @property
@@ -46,6 +49,7 @@ def _parse_csv(raw: str) -> list[str]:
 def get_settings() -> Settings:
     backend_root = Path(__file__).resolve().parents[2]
     project_root = backend_root.parent
+    load_dotenv(project_root / ".env", override=False)
     artifacts_root = Path(os.getenv("ARTIFACTS_ROOT", str(backend_root / "artifacts"))).expanduser().resolve()
     artifacts_root.mkdir(parents=True, exist_ok=True)
     ftp_registry_root = Path(
@@ -67,5 +71,8 @@ def get_settings() -> Settings:
         ftp_default_port=int(os.getenv("FTP_DEFAULT_PORT", "2121")),
         ftp_default_username=os.getenv("FTP_DEFAULT_USERNAME", "mlops"),
         ftp_default_password=os.getenv("FTP_DEFAULT_PASSWORD", "mlops123!"),
+        training_catalog_path=Path(
+            os.getenv("TRAINING_CATALOG_PATH", str(backend_root / "config" / "training_catalog.yaml"))
+        ).expanduser().resolve(),
         runs_log_tail=int(os.getenv("RUNS_LOG_TAIL", "200")),
     )

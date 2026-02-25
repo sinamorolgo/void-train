@@ -1,0 +1,26 @@
+[project]
+name = "void-train-manager"
+version = "0.1.0"
+description = "Web-based training manager for PyTorch + MLflow workflows"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+backend = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "mlflow>=2.12.0",
+  "torch>=2.2.0",
+  "tensorboard>=2.14.0",
+  "numpy>=1.26.0",
+  "python-multipart>=0.0.9",
+  "pyftpdlib>=1.5.9",
+  "python-dotenv>=1.0.0",
+  "pyyaml>=6.0.0",
+]
+postgres-mlflow = [
+  "psycopg2-binary>=2.9.9",
+]

@@ -25,7 +25,7 @@ SSH 터널링으로 이미 떠 있는 DB/Redis 포트는 건드리지 않습니�
 ```bash
 cd /Users/nok/workspace/void-train-manager
 uv venv .venv --python 3.11
-uv pip install --python .venv/bin/python -r backend/requirements.txt
+uv sync --python .venv/bin/python --only-group backend --no-default-groups
 
 # MLflow tracking server (SQLite backend)
 ./backend/scripts/start_mlflow_local.sh
@@ -40,13 +40,36 @@ uv pip install --python .venv/bin/python -r backend/requirements.txt
 cd /Users/nok/workspace/void-train-manager
 docker compose -f docker-compose.local-mlflow-postgres.yml up -d
 
-uv pip install --python .venv/bin/python psycopg2-binary
+uv sync --python .venv/bin/python --group backend --group postgres-mlflow --no-default-groups
 
 .venv/bin/python -m mlflow server \
   --host 0.0.0.0 \
   --port 5001 \
   --backend-store-uri postgresql+psycopg2://mlflow:mlflow@127.0.0.1:55433/mlflow \
   --artifacts-destination ./backend/mlruns/artifacts
+```
+
+### pip fallback 설치 (requirements 기반)
+
+`uv` 대신 `pip`로도 동일한 의존성 설치가 가능합니다.
+
+```bash
+cd /Users/nok/workspace/void-train-manager
+python3 -m venv .venv
+.venv/bin/python -m pip install -U pip
+.venv/bin/python -m pip install -r backend/requirements.txt
+```
+
+PostgreSQL backend까지 함께 쓰려면:
+
+```bash
+.venv/bin/python -m pip install -r backend/requirements-postgres-mlflow.txt
+```
+
+requirements 파일은 아래 명령으로 `pyproject.toml`/`uv.lock` 기준 재생성합니다.
+
+```bash
+./backend/scripts/sync_requirements.sh
 ```
 
 ## 4) Frontend 실행
@@ -59,7 +82,28 @@ pnpm dev
 
 접속: `http://127.0.0.1:5173`
 
-## 5) TensorBoard → MLflow 빠른 전환
+## 5) YAML 기반 런처 일원화 설정
+
+UI와 백엔드는 아래 파일을 단일 소스로 사용합니다.
+
+- `backend/config/training_catalog.yaml`
+
+`.env`에서 경로만 바꿔서 다른 설정 파일로 교체할 수 있습니다.
+
+```bash
+cp .env.example .env
+# 필요 시 수정
+TRAINING_CATALOG_PATH=./backend/config/training_catalog.yaml
+```
+
+카탈로그에서 조정 가능한 항목:
+
+- task 노출/이름/설명 (`taskType`, `title`, `description`, `enabled`)
+- 시작 방법/타깃 (`runner.startMethod`, `runner.target`, `runner.targetEnvVar`)
+- UI 폼/args 구성 (`fieldOrder`, `hiddenFields`, `fieldOverrides`)
+- MLflow 기본값 (`mlflow.metric`, `mlflow.mode`, `mlflow.modelName`, `mlflow.artifactPath`)
+
+## 6) TensorBoard → MLflow 빠른 전환
 
 ### A. 기존 코드 유지 + 동시 로깅
 
@@ -86,9 +130,9 @@ cd /Users/nok/workspace/void-train-manager
 
 또는 UI의 `MLflow Ops -> TensorBoard -> MLflow` 카드에서 바로 실행할 수 있습니다.
 
-## 6) 기존 train.py 연결 방법
+## 7) 기존 train.py 연결 방법
 
-이미 운영 중인 `train.py` 2개(분류/세그)가 있다면 환경변수로 교체 가능합니다.
+이미 운영 중인 `train.py`를 쓰려면 카탈로그 + 환경변수 조합으로 교체합니다.
 
 ```bash
 export CLASSIFICATION_SCRIPT_PATH=/abs/path/to/your/classification_train.py
@@ -97,7 +141,7 @@ export SEGMENTATION_SCRIPT_PATH=/abs/path/to/your/segmentation_train.py
 
 권장 추가 사항:
 
-1. UI/런처와 인자 일치를 위해 `backend/app/core/train_config.py`의 dataclass 필드명을 기준으로 CLI arg를 맞춥니다.
+1. CLI 인자 이름은 기존 dataclass 템플릿 필드를 따르되, 실제 노출/기본값/순서는 `training_catalog.yaml`에서 관리합니다.
 2. 실시간 진행률을 UI에 보내려면 stdout에 아래 prefix JSON 라인을 출력합니다.
 
 ```python
@@ -110,7 +154,7 @@ print("VTM_PROGRESS::" + json.dumps({"epoch": epoch, "total_epochs": epochs, "va
 print("VTM_RUN_META::" + json.dumps({"mlflow_run_id": run.info.run_id}), flush=True)
 ```
 
-## 7) 모델 서빙 전략
+## 8) 모델 서빙 전략
 
 ### 1순위: MLflow native serve
 
@@ -122,7 +166,7 @@ print("VTM_RUN_META::" + json.dumps({"mlflow_run_id": run.info.run_id}), flush=T
 - UI에서 FTP 정보 입력 → 모델 파일 다운로드
 - `Local Loader`로 checkpoint 로드 후 `Local Predict` 사용
 
-## 8) FTP 모델 레지스트리 (dev/release)
+## 9) FTP 모델 레지스트리 (dev/release)
 
 - MLflow run artifact를 `dev` 스테이지에 publish
 - 검증 후 `release`로 promote
@@ -130,7 +174,7 @@ print("VTM_RUN_META::" + json.dumps({"mlflow_run_id": run.info.run_id}), flush=T
 
 자세한 내용은 [FTP_MODEL_REGISTRY.md](./FTP_MODEL_REGISTRY.md) 참고.
 
-## 9) 체크리스트
+## 10) 체크리스트
 
 - [ ] `http://127.0.0.1:5001` MLflow UI 접속 가능
 - [ ] `http://127.0.0.1:8008/api/health` 응답 확인
