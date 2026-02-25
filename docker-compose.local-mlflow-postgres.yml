@@ -1,0 +1,16 @@
+services:
+  mlflow_postgres:
+    image: postgres:16-alpine
+    container_name: vtm_mlflow_postgres
+    restart: unless-stopped
+    ports:
+      - "55433:5432"
+    environment:
+      POSTGRES_DB: mlflow
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflow
+    volumes:
+      - mlflow_pg_data:/var/lib/postgresql/data
+
+volumes:
+  mlflow_pg_data:

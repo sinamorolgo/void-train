@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400;600;700&family=Manrope:wght@400;500;700;800&display=swap');
+
+:root {
+  --bg-900: #0d1314;
+  --bg-800: #131e20;
+  --bg-700: #1a2a2d;
+  --text-100: #eef5f3;
+  --text-300: #b3c8c2;
+  --accent-500: #ff9152;
+  --accent-600: #ff7c36;
+  --mint-500: #5dd6bf;
+  --danger-500: #ff5f6d;
+  --border: rgba(174, 231, 214, 0.18);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: 'Manrope', sans-serif;
+  color: var(--text-100);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(255, 145, 82, 0.2), transparent 25%),
+    radial-gradient(circle at 88% 18%, rgba(93, 214, 191, 0.2), transparent 25%),
+    linear-gradient(130deg, #0d1314 0%, #111a1c 45%, #0c1213 100%);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}

@@ -1,0 +1,208 @@
+import { useMemo, useState } from 'react'
+
+import type { MlflowRunItem, TaskType } from '../types'
+import { SectionCard } from './SectionCard'
+
+interface MlflowPanelProps {
+  taskType: TaskType
+  runs: MlflowRunItem[]
+  defaultTrackingUri: string
+  defaultExperiment: string
+  busy: boolean
+  onSelectBest: (payload: {
+    taskType: TaskType
+    metric: string
+    mode: 'max' | 'min'
+    experimentName: string
+    modelName: string
+    registerToMlflow: boolean
+    artifactPath: string
+  }) => void
+  onMigrateTensorBoard: (payload: {
+    tensorboardDir: string
+    trackingUri: string
+    experimentName: string
+    runName: string
+  }) => void
+}
+
+export function MlflowPanel({
+  taskType,
+  runs,
+  defaultTrackingUri,
+  defaultExperiment,
+  busy,
+  onSelectBest,
+  onMigrateTensorBoard,
+}: MlflowPanelProps) {
+  const [metric, setMetric] = useState(taskType === 'classification' ? 'val_accuracy' : 'val_iou')
+  const [mode, setMode] = useState<'max' | 'min'>('max')
+  const [modelName, setModelName] = useState(`${taskType}-best-model`)
+  const [artifactPath, setArtifactPath] = useState('model')
+
+  const [tbDir, setTbDir] = useState('./outputs/tensorboard')
+  const [trackingUri, setTrackingUri] = useState(defaultTrackingUri)
+  const [experimentName, setExperimentName] = useState(defaultExperiment)
+  const [tbRunName, setTbRunName] = useState('tb-import')
+
+  const rows = useMemo(() => runs.slice(0, 8), [runs])
+
+  return (
+    <SectionCard title="MLflow Ops" subtitle="베스트 모델 선택, 등록, TensorBoard 로그 마이그레이션을 관리합니다.">
+      <div className="mlflow-grid">
+        <div className="mini-card">
+          <h3>Best Model Picker</h3>
+          <div className="compact-fields">
+            <label>
+              Metric
+              <input
+                name="metric"
+                autoComplete="off"
+                value={metric}
+                onChange={(event) => setMetric(event.target.value)}
+                placeholder="val_accuracy"
+              />
+            </label>
+            <label>
+              Mode
+              <select
+                name="mode"
+                value={mode}
+                onChange={(event) => setMode(event.target.value as 'max' | 'min')}
+              >
+                <option value="max">max</option>
+                <option value="min">min</option>
+              </select>
+            </label>
+            <label>
+              Model Name
+              <input
+                name="model_name"
+                autoComplete="off"
+                value={modelName}
+                onChange={(event) => setModelName(event.target.value)}
+              />
+            </label>
+            <label>
+              Artifact Path
+              <input
+                name="artifact_path"
+                autoComplete="off"
+                value={artifactPath}
+                onChange={(event) => setArtifactPath(event.target.value)}
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              onSelectBest({
+                taskType,
+                metric,
+                mode,
+                experimentName,
+                modelName,
+                registerToMlflow: true,
+                artifactPath,
+              })
+            }
+            disabled={busy}
+          >
+            Pick & Register Best
+          </button>
+        </div>
+
+        <div className="mini-card">
+          <h3>TensorBoard → MLflow</h3>
+          <div className="compact-fields">
+            <label>
+              TensorBoard Dir
+              <input
+                name="tensorboard_dir"
+                autoComplete="off"
+                value={tbDir}
+                onChange={(event) => setTbDir(event.target.value)}
+              />
+            </label>
+            <label>
+              Tracking URI
+              <input
+                name="tracking_uri"
+                autoComplete="off"
+                value={trackingUri}
+                onChange={(event) => setTrackingUri(event.target.value)}
+              />
+            </label>
+            <label>
+              Experiment Name
+              <input
+                name="experiment_name"
+                autoComplete="off"
+                value={experimentName}
+                onChange={(event) => setExperimentName(event.target.value)}
+              />
+            </label>
+            <label>
+              Run Name
+              <input
+                name="tb_run_name"
+                autoComplete="off"
+                value={tbRunName}
+                onChange={(event) => setTbRunName(event.target.value)}
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              onMigrateTensorBoard({
+                tensorboardDir: tbDir,
+                trackingUri,
+                experimentName,
+                runName: tbRunName,
+              })
+            }
+            disabled={busy}
+          >
+            Import TensorBoard Scalars
+          </button>
+        </div>
+      </div>
+
+      <div className="mini-card table-card">
+        <h3>Recent MLflow Runs ({taskType})</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>Status</th>
+              <th>Metric</th>
+              <th>Started</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="empty-cell">
+                  아직 MLflow 런이 없습니다.
+                </td>
+              </tr>
+            ) : (
+              rows.map((run) => {
+                const keyMetric = taskType === 'classification' ? run.metrics.val_accuracy : run.metrics.val_iou
+                return (
+                  <tr key={run.runId}>
+                    <td>{run.runName}</td>
+                    <td>{run.status}</td>
+                    <td>{keyMetric !== undefined ? keyMetric.toFixed(4) : '-'}</td>
+                    <td>{new Date(run.startTime).toLocaleString()}</td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </SectionCard>
+  )
+}
