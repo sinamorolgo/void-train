@@ -7,6 +7,7 @@ import { DownloadMlflowCard } from './serving/DownloadMlflowCard'
 import { LocalLoaderCard } from './serving/LocalLoaderCard'
 import { LocalPredictCard } from './serving/LocalPredictCard'
 import { MlflowServeCard } from './serving/MlflowServeCard'
+import { RegisterPytorchCard } from './serving/RegisterPytorchCard'
 
 interface ServingPanelProps {
   localModels: LocalModel[]
@@ -34,6 +35,18 @@ interface ServingPanelProps {
     taskType?: TaskType
     numClasses?: number
   }) => void
+  onPublishFtpModel: (payload: {
+    modelName: string
+    stage: 'dev' | 'release'
+    sourceType: 'local'
+    localPath: string
+    version?: string
+    setLatest?: boolean
+    notes?: string
+    convertToTorchStandard?: boolean
+    torchTaskType?: 'classification' | 'segmentation'
+    torchNumClasses?: number
+  }) => void
   onPredict: (alias: string, inputs: unknown) => void
 }
 
@@ -46,6 +59,7 @@ export function ServingPanel({
   onStartMlflowServing,
   onStopMlflowServing,
   onLoadLocalModel,
+  onPublishFtpModel,
   onPredict,
 }: ServingPanelProps) {
   const [trackingUri, setTrackingUri] = useState('http://127.0.0.1:5001')
@@ -67,6 +81,15 @@ export function ServingPanel({
   const [modelPath, setModelPath] = useState('')
   const [taskType, setTaskType] = useState<TaskType>('classification')
   const [numClasses, setNumClasses] = useState(5)
+
+  const [registerModelName, setRegisterModelName] = useState('classification-best-model')
+  const [registerStage, setRegisterStage] = useState<'dev' | 'release'>('dev')
+  const [registerLocalPath, setRegisterLocalPath] = useState('')
+  const [registerVersion, setRegisterVersion] = useState('')
+  const [registerNotes, setRegisterNotes] = useState('')
+  const [registerTaskType, setRegisterTaskType] = useState<'classification' | 'segmentation'>('classification')
+  const [registerNumClasses, setRegisterNumClasses] = useState(2)
+  const [convertToTorchStandard, setConvertToTorchStandard] = useState(true)
 
   const [predictAlias, setPredictAlias] = useState('local-classifier')
   const [predictInput, setPredictInput] = useState('[[[[0.1,0.2],[0.3,0.4]]]]')
@@ -128,6 +151,40 @@ export function ServingPanel({
       </div>
 
       <div className="mlflow-grid">
+        <RegisterPytorchCard
+          modelName={registerModelName}
+          stage={registerStage}
+          localPath={registerLocalPath}
+          version={registerVersion}
+          notes={registerNotes}
+          taskType={registerTaskType}
+          numClasses={registerNumClasses}
+          convertToTorchStandard={convertToTorchStandard}
+          busy={busy}
+          onModelNameChange={setRegisterModelName}
+          onStageChange={setRegisterStage}
+          onLocalPathChange={setRegisterLocalPath}
+          onVersionChange={setRegisterVersion}
+          onNotesChange={setRegisterNotes}
+          onTaskTypeChange={setRegisterTaskType}
+          onNumClassesChange={setRegisterNumClasses}
+          onConvertChange={setConvertToTorchStandard}
+          onRegister={() =>
+            onPublishFtpModel({
+              modelName: registerModelName,
+              stage: registerStage,
+              sourceType: 'local',
+              localPath: registerLocalPath,
+              version: registerVersion || undefined,
+              setLatest: true,
+              notes: registerNotes || undefined,
+              convertToTorchStandard,
+              torchTaskType: registerTaskType,
+              torchNumClasses: registerNumClasses,
+            })
+          }
+        />
+
         <LocalLoaderCard
           alias={alias}
           modelPath={modelPath}

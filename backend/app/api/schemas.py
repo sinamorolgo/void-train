@@ -86,6 +86,9 @@ class PublishFtpModelRequest(BaseModel):
     runId: str | None = None
     artifactPath: str = "model"
     localPath: str | None = None
+    convertToTorchStandard: bool = False
+    torchTaskType: BaseTaskType | None = None
+    torchNumClasses: int | None = None
 
 
 class PromoteFtpModelRequest(BaseModel):

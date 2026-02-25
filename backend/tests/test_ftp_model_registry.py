@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import torch
+
 from app.services.ftp_model_registry import FtpModelRegistry
 
 
@@ -113,6 +115,44 @@ class FtpModelRegistryTest(unittest.TestCase):
         self.assertEqual(source["type"], "mlflow")
         self.assertEqual(source["artifactPath"], "model")
         self.assertEqual(source["resolvedArtifactPath"], "checkpoints/best_checkpoint.pt")
+
+    def test_publish_local_pth_and_convert_to_torch_standard(self) -> None:
+        pth_source = self.root / "weights"
+        pth_source.mkdir(parents=True, exist_ok=True)
+
+        checkpoint = {
+            "task_type": "classification",
+            "num_classes": 3,
+            "model_state_dict": {"head.weight": torch.randn(3, 4)},
+        }
+        source_file = pth_source / "best_checkpoint.pth"
+        torch.save(checkpoint, source_file)
+
+        published = self.registry.publish_from_local(
+            model_name="PTH Model",
+            stage="dev",
+            local_source_path=str(source_file),
+            version=None,
+            set_latest=True,
+            notes="pth convert",
+            source_metadata={"type": "local"},
+            convert_to_torch_standard=True,
+            torch_task_type="classification",
+            torch_num_classes=3,
+        )
+
+        self.assertTrue(str(published["standardArtifactPath"]).endswith("/payload/model-standard.pt"))
+
+        resolved = self.registry.resolve("dev", "PTH Model", "latest")
+        entry = resolved["entry"]
+        standard_path = entry["standardArtifacts"]["pytorch"]
+        local_standard_path = self.registry.root_dir / standard_path.lstrip("/")
+        self.assertTrue(local_standard_path.exists())
+
+        standardized = torch.load(local_standard_path, map_location="cpu")
+        self.assertEqual(standardized["standard_format"], "void_torch_checkpoint_v1")
+        self.assertIn("model_state_dict", standardized)
+        self.assertEqual(standardized["num_classes"], 3)
 
 
 if __name__ == "__main__":

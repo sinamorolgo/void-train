@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import './App.css'
@@ -19,7 +19,7 @@ interface Notice {
 
 export default function App() {
   const queryClient = useQueryClient()
-  const [selectedTask, setSelectedTask] = useState<TaskType>('')
+  const [selectedTaskState, setSelectedTaskState] = useState<TaskType>('')
   const [formByTask, setFormByTask] = useState<Record<string, Record<string, unknown>>>({})
   const [notices, setNotices] = useState<Notice[]>([])
 
@@ -29,30 +29,34 @@ export default function App() {
 
   const schemasQuery = useQuery({ queryKey: ['schemas'], queryFn: api.getSchemas })
 
-  useEffect(() => {
-    if (!schemasQuery.data || schemasQuery.data.length === 0) return
+  const schemas = useMemo(() => schemasQuery.data ?? [], [schemasQuery.data])
 
-    setFormByTask((prev) => {
-      const next = { ...prev }
-      for (const schema of schemasQuery.data) {
-        if (!next[schema.taskType] || Object.keys(next[schema.taskType]).length === 0) {
-          next[schema.taskType] = buildDefaults(schema)
-        }
-      }
-      return next
-    })
+  const defaultFormByTask = useMemo(() => {
+    const map: Record<string, Record<string, unknown>> = {}
+    for (const schema of schemas) {
+      map[schema.taskType] = buildDefaults(schema)
+    }
+    return map
+  }, [schemas])
 
-    setSelectedTask((prev) => {
-      const hasPrev = prev && schemasQuery.data.some((schema) => schema.taskType === prev)
-      return hasPrev ? prev : schemasQuery.data[0].taskType
-    })
-  }, [schemasQuery.data])
+  const selectedTask = useMemo(() => {
+    if (selectedTaskState && schemas.some((schema) => schema.taskType === selectedTaskState)) {
+      return selectedTaskState
+    }
+    return schemas[0]?.taskType ?? ''
+  }, [schemas, selectedTaskState])
 
   const selectedSchema = useMemo(
-    () => (schemasQuery.data ?? []).find((schema) => schema.taskType === selectedTask),
-    [schemasQuery.data, selectedTask],
+    () => schemas.find((schema) => schema.taskType === selectedTask),
+    [schemas, selectedTask],
   )
-  const selectedValues = selectedTask ? formByTask[selectedTask] ?? {} : {}
+  const selectedValues = useMemo(() => {
+    if (!selectedTask) return {}
+    return {
+      ...(defaultFormByTask[selectedTask] ?? {}),
+      ...(formByTask[selectedTask] ?? {}),
+    }
+  }, [defaultFormByTask, formByTask, selectedTask])
 
   const runsQuery = useQuery({
     queryKey: ['runs'],
@@ -161,11 +165,11 @@ export default function App() {
 
       <main id="main-content">
         <LaunchPanel
-          schemas={schemasQuery.data ?? []}
+          schemas={schemas}
           selectedTask={selectedTask}
           values={selectedValues}
           onTaskChange={(task) => {
-            setSelectedTask(task)
+            setSelectedTaskState(task)
           }}
           onFieldChange={(name, value) => {
             setFormByTask((prev) => ({
@@ -214,6 +218,7 @@ export default function App() {
           onStartMlflowServing={(payload) => servingMutation.mutate(() => api.startMlflowServing(payload))}
           onStopMlflowServing={(serverId) => servingMutation.mutate(() => api.stopMlflowServing(serverId))}
           onLoadLocalModel={(payload) => servingMutation.mutate(() => api.loadLocalModel(payload))}
+          onPublishFtpModel={(payload) => servingMutation.mutate(() => api.publishFtpModel(payload))}
           onPredict={(alias, inputs) => servingMutation.mutate(() => api.predictLocal(alias, inputs))}
         />
       </main>

@@ -4,6 +4,9 @@ PyTorch 학습(분류/세그)을 웹 UI로 실행하고 MLflow 중심으로 추�
 
 학습 런처 UI/백엔드는 `backend/config/training_catalog.yaml` 하나로 일원화되어 동작합니다.
 
+모델 배포는 UI의 `Model Serving` 섹션에서 `.pth/.pt`를 FTP 레지스트리에 등록하고,
+선택적으로 PyTorch 표준 아티팩트(`model-standard.pt`)로 변환 등록할 수 있습니다.
+
 ## 빠른 시작
 
 1. 백엔드 + MLflow 실행

@@ -164,6 +164,8 @@ print("VTM_RUN_META::" + json.dumps({"mlflow_run_id": run.info.run_id}), flush=T
 ### 2순위: FTP fallback
 
 - UI에서 FTP 정보 입력 → 모델 파일 다운로드
+- UI의 `Register .pth/.pt to FTP` 카드에서 로컬 `.pth/.pt`를 바로 publish 가능
+- `Convert to Torch Standard` 체크 시 `model-standard.pt` 생성/등록
 - `Local Loader`로 checkpoint 로드 후 `Local Predict` 사용
 
 ## 9) FTP 모델 레지스트리 (dev/release)

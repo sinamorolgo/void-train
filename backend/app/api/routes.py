@@ -327,6 +327,9 @@ def _publish_ftp_from_mlflow(payload: PublishFtpModelRequest) -> dict[str, Any]:
         tracking_uri=payload.trackingUri or settings.default_mlflow_tracking_uri,
         run_id=payload.runId,
         artifact_path=payload.artifactPath,
+        convert_to_torch_standard=payload.convertToTorchStandard,
+        torch_task_type=payload.torchTaskType,
+        torch_num_classes=payload.torchNumClasses,
     )
 
 
@@ -341,6 +344,9 @@ def _publish_ftp_from_local(payload: PublishFtpModelRequest) -> dict[str, Any]:
         set_latest=payload.setLatest,
         notes=payload.notes,
         source_metadata={"type": "local", "localPath": payload.localPath},
+        convert_to_torch_standard=payload.convertToTorchStandard,
+        torch_task_type=payload.torchTaskType,
+        torch_num_classes=payload.torchNumClasses,
     )
 
 

@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+import torch
+
 from app.core.settings import get_settings
 from app.services.mlflow_service import download_artifact
 
@@ -186,6 +188,7 @@ class FtpModelRegistry:
         source_metadata: dict[str, Any],
         files: list[dict[str, Any]],
         bundle_name: str,
+        standard_artifacts: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         ftp_paths = self._build_ftp_paths(
             stage=stage,
@@ -193,7 +196,7 @@ class FtpModelRegistry:
             version=version,
             bundle_name=bundle_name,
         )
-        return {
+        payload = {
             "modelName": model_name,
             "modelSlug": model_slug,
             "stage": stage,
@@ -208,6 +211,9 @@ class FtpModelRegistry:
                 "manifest": ftp_paths["manifest"],
             },
         }
+        if standard_artifacts:
+            payload["standardArtifacts"] = standard_artifacts
+        return payload
 
     def _build_version_entry(
         self,
@@ -218,14 +224,120 @@ class FtpModelRegistry:
         source_metadata: dict[str, Any],
         bundle_path: str,
         manifest_path: str,
+        standard_artifacts: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        return {
+        payload = {
             "version": version,
             "createdAt": created_at,
             "notes": notes,
             "bundle": bundle_path,
             "manifest": manifest_path,
             "source": source_metadata,
+        }
+        if standard_artifacts:
+            payload["standardArtifacts"] = standard_artifacts
+        return payload
+
+    def _looks_like_state_dict(self, data: Any) -> bool:
+        if not isinstance(data, dict):
+            return False
+        if not data:
+            return False
+        return all(isinstance(key, str) for key in data.keys()) and any(
+            torch.is_tensor(value) for value in data.values()
+        )
+
+    def _discover_torch_payload_file(self, payload_dir: Path) -> Path | None:
+        preferred = [
+            "best_checkpoint.pth",
+            "best_checkpoint.pt",
+            "model.pth",
+            "model.pt",
+        ]
+        for name in preferred:
+            found = list(payload_dir.rglob(name))
+            if found:
+                return found[0]
+
+        for extension in ("*.pth", "*.pt"):
+            found = sorted(payload_dir.rglob(extension))
+            if found:
+                return found[0]
+        return None
+
+    def _build_torch_standard_payload(
+        self,
+        *,
+        raw_checkpoint: Any,
+        source_file_name: str,
+        task_type: str | None,
+        num_classes: int | None,
+    ) -> dict[str, Any]:
+        standardized: dict[str, Any]
+        if isinstance(raw_checkpoint, torch.nn.Module):
+            standardized = {
+                "model_state_dict": raw_checkpoint.state_dict(),
+                "task_type": task_type or "classification",
+                "num_classes": num_classes,
+            }
+        elif isinstance(raw_checkpoint, dict):
+            standardized = dict(raw_checkpoint)
+            if "model_state_dict" in standardized and isinstance(standardized["model_state_dict"], dict):
+                pass
+            elif self._looks_like_state_dict(standardized):
+                standardized = {
+                    "model_state_dict": standardized,
+                }
+            else:
+                raise ValueError(
+                    "Unsupported .pth format. Expected state_dict or dict containing model_state_dict."
+                )
+            standardized.setdefault("task_type", task_type or "classification")
+            if num_classes is not None:
+                standardized["num_classes"] = num_classes
+        else:
+            raise ValueError("Unsupported .pth format. torch.load result must be nn.Module or dict.")
+
+        if num_classes is not None and standardized.get("num_classes") is None:
+            standardized["num_classes"] = num_classes
+
+        standardized["standard_format"] = "void_torch_checkpoint_v1"
+        standardized["source_file"] = source_file_name
+        standardized["converted_at"] = _utc_now()
+        return standardized
+
+    def _maybe_generate_torch_standard(
+        self,
+        *,
+        payload_dir: Path,
+        stage: StageType,
+        model_slug: str,
+        version: str,
+        convert_to_torch_standard: bool,
+        torch_task_type: str | None,
+        torch_num_classes: int | None,
+    ) -> dict[str, str] | None:
+        if not convert_to_torch_standard:
+            return None
+
+        source_file = self._discover_torch_payload_file(payload_dir)
+        if source_file is None:
+            raise FileNotFoundError("No .pth/.pt file found in payload for torch standard conversion")
+
+        loaded = torch.load(str(source_file), map_location="cpu")
+        standardized = self._build_torch_standard_payload(
+            raw_checkpoint=loaded,
+            source_file_name=source_file.name,
+            task_type=torch_task_type,
+            num_classes=torch_num_classes,
+        )
+
+        target = payload_dir / "model-standard.pt"
+        torch.save(standardized, str(target))
+
+        return {
+            "pytorch": f"/{stage}/{model_slug}/versions/{version}/payload/model-standard.pt",
+            "source": source_file.relative_to(payload_dir).as_posix(),
         }
 
     def _mlflow_artifact_candidates(self, artifact_path: str) -> list[str]:
@@ -255,6 +367,9 @@ class FtpModelRegistry:
         set_latest: bool,
         notes: str | None,
         source_metadata: dict[str, Any],
+        convert_to_torch_standard: bool = False,
+        torch_task_type: str | None = None,
+        torch_num_classes: int | None = None,
     ) -> dict[str, Any]:
         source_path = Path(local_source_path).expanduser().resolve()
         if not source_path.exists():
@@ -272,6 +387,16 @@ class FtpModelRegistry:
 
             payload_dir = version_dir / "payload"
             files = self._copy_payload(source_path, payload_dir)
+            standard_artifacts = self._maybe_generate_torch_standard(
+                payload_dir=payload_dir,
+                stage=stage,
+                model_slug=model_slug,
+                version=resolved_version,
+                convert_to_torch_standard=convert_to_torch_standard,
+                torch_task_type=torch_task_type,
+                torch_num_classes=torch_num_classes,
+            )
+            files = _walk_file_entries(payload_dir)
             bundle_name = self._bundle_payload(version_dir, payload_dir)
             manifest = self._build_manifest(
                 model_name=model_name,
@@ -282,6 +407,7 @@ class FtpModelRegistry:
                 source_metadata=source_metadata,
                 files=files,
                 bundle_name=bundle_name,
+                standard_artifacts=standard_artifacts,
             )
             self._write_version_manifest(version_dir, manifest)
 
@@ -294,6 +420,7 @@ class FtpModelRegistry:
                     source_metadata=source_metadata,
                     bundle_path=str(manifest["ftpPaths"]["bundle"]),
                     manifest_path=str(manifest["ftpPaths"]["manifest"]),
+                    standard_artifacts=standard_artifacts,
                 )
             )
             index["versions"] = versions
@@ -320,6 +447,7 @@ class FtpModelRegistry:
             "latestPath": ftp_paths["latest"],
             "indexPath": ftp_paths["index"],
             "versionCount": len(index.get("versions", [])),
+            "standardArtifactPath": standard_artifacts.get("pytorch") if standard_artifacts else None,
         }
 
     def publish_from_mlflow(
@@ -333,6 +461,9 @@ class FtpModelRegistry:
         tracking_uri: str,
         run_id: str,
         artifact_path: str,
+        convert_to_torch_standard: bool = False,
+        torch_task_type: str | None = None,
+        torch_num_classes: int | None = None,
     ) -> dict[str, Any]:
         with tempfile.TemporaryDirectory(prefix="ftp-registry-") as temp_dir:
             local_source: str | None = None
@@ -375,6 +506,9 @@ class FtpModelRegistry:
                     "artifactPath": artifact_path,
                     "resolvedArtifactPath": resolved_artifact_path,
                 },
+                convert_to_torch_standard=convert_to_torch_standard,
+                torch_task_type=torch_task_type,
+                torch_num_classes=torch_num_classes,
             )
 
     def list_models(self, stage: StageType) -> list[dict[str, Any]]:

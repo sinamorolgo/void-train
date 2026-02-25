@@ -51,7 +51,27 @@ curl -X POST http://127.0.0.1:8008/api/ftp-registry/publish \
   }'
 ```
 
-### 2) dev -> release promote
+### 2) Local `.pth/.pt` publish + PyTorch 표준 변환
+
+```bash
+curl -X POST http://127.0.0.1:8008/api/ftp-registry/publish \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "modelName":"classification-best-model",
+    "stage":"dev",
+    "sourceType":"local",
+    "localPath":"./outputs/checkpoints/best_checkpoint.pth",
+    "convertToTorchStandard":true,
+    "torchTaskType":"classification",
+    "torchNumClasses":5,
+    "setLatest":true
+  }'
+```
+
+변환이 켜지면 payload에 `model-standard.pt`가 생성되고,
+manifest/index에 `standardArtifacts.pytorch` 경로가 기록됩니다.
+
+### 3) dev -> release promote
 
 ```bash
 curl -X POST http://127.0.0.1:8008/api/ftp-registry/promote \
@@ -65,7 +85,7 @@ curl -X POST http://127.0.0.1:8008/api/ftp-registry/promote \
   }'
 ```
 
-### 3) 모델 resolve (latest/특정 버전)
+### 4) 모델 resolve (latest/특정 버전)
 
 ```bash
 curl 'http://127.0.0.1:8008/api/ftp-registry/models/release/classification-best-model/resolve?version=latest'
@@ -124,6 +144,8 @@ bundle = client.get("release", "classification-best-model", "latest")
 print(bundle.preferred_weight_path)
 # torch.load(bundle.preferred_weight_path, map_location="cpu")
 ```
+
+`preferred_weight_path`는 우선순위로 `model-standard.pt`를 먼저 선택합니다.
 
 ## 참고
 

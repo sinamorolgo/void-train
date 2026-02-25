@@ -22,6 +22,7 @@
 - `app/services/ftp_model_registry.py`
   - FTP 배포 표준 구조(dev/release, LATEST, versions) 관리
   - MLflow/local source publish + stage promote + version resolve
+  - local `.pth/.pt` 업로드 시 `model-standard.pt` 변환 등록 지원
 - `app/services/ftp_server_manager.py`
   - 내장 FTP 서버(pyftpdlib) start/stop/list 제어
 - `app/services/model_serving.py`
@@ -45,6 +46,7 @@
   - best model 선택/등록, TB→MLflow 이관
 - `src/components/ServingPanel.tsx`
   - MLflow serve + FTP fallback + local load/predict
+  - `.pth/.pt` FTP publish + 표준 변환 버튼 제공
 
 ## Training Scripts
 

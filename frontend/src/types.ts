@@ -1,4 +1,6 @@
 export type TaskType = string
+export type BaseTaskType = 'classification' | 'segmentation'
+export type RegistryStage = 'dev' | 'release'
 
 export type FieldType = 'text' | 'number' | 'boolean' | 'select'
 
@@ -19,7 +21,7 @@ export interface ConfigField {
 
 export interface TaskSchema {
   taskType: TaskType
-  baseTaskType: 'classification' | 'segmentation'
+  baseTaskType: BaseTaskType
   title: string
   description?: string
   runner: {

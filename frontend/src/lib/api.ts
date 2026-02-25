@@ -1,6 +1,15 @@
 import axios from 'axios'
 
-import type { LocalModel, MlflowRunItem, MlflowServeServer, RunItem, TaskSchema, TaskType } from '../types'
+import type {
+  BaseTaskType,
+  LocalModel,
+  MlflowRunItem,
+  MlflowServeServer,
+  RegistryStage,
+  RunItem,
+  TaskSchema,
+  TaskType,
+} from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8008/api'
 
@@ -71,6 +80,24 @@ export const api = {
     destinationDir: string
   }): Promise<{ source: string; localPath: string }> => {
     const { data } = await client.post('/models/download', { source: 'ftp', ...payload })
+    return data
+  },
+  publishFtpModel: async (payload: {
+    modelName: string
+    stage: RegistryStage
+    sourceType: 'local' | 'mlflow'
+    version?: string
+    setLatest?: boolean
+    notes?: string
+    localPath?: string
+    trackingUri?: string
+    runId?: string
+    artifactPath?: string
+    convertToTorchStandard?: boolean
+    torchTaskType?: BaseTaskType
+    torchNumClasses?: number
+  }): Promise<Record<string, unknown>> => {
+    const { data } = await client.post('/ftp-registry/publish', payload)
     return data
   },
   startMlflowServing: async (payload: {

@@ -33,12 +33,13 @@ class FtpModelClientTest(unittest.TestCase):
         self.assertIn("void-train-manager", str(root))
         self.assertEqual(root.name, "ftp-model-registry")
 
-    def test_preferred_weight_path_picks_best_checkpoint(self) -> None:
+    def test_preferred_weight_path_picks_model_standard_first(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ftp-client-weights-") as temp_dir:
             payload = Path(temp_dir) / "payload"
             payload.mkdir(parents=True, exist_ok=True)
             (payload / "epoch_2.pt").write_bytes(b"a")
             (payload / "best_checkpoint.pt").write_bytes(b"b")
+            (payload / "model-standard.pt").write_bytes(b"c")
 
             client = FtpModelRegistryClient(
                 FtpModelClientConfig(
@@ -47,7 +48,7 @@ class FtpModelClientTest(unittest.TestCase):
                 )
             )
             preferred = client._preferred_weight_path(payload)  # noqa: SLF001
-            self.assertEqual(preferred, payload / "best_checkpoint.pt")
+            self.assertEqual(preferred, payload / "model-standard.pt")
 
 
 if __name__ == "__main__":

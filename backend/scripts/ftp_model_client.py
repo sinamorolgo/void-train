@@ -130,13 +130,20 @@ class FtpModelRegistryClient:
         return extracted_payload if extracted_payload.exists() else payload_root
 
     def _preferred_weight_path(self, payload_dir: Path) -> Path | None:
-        candidates = sorted(payload_dir.rglob("*.pt"))
-        if not candidates:
-            return None
-        for candidate in candidates:
-            if candidate.name == "best_checkpoint.pt":
-                return candidate
-        return candidates[0]
+        preferred_names = [
+            "model-standard.pt",
+            "best_checkpoint.pth",
+            "best_checkpoint.pt",
+            "model.pth",
+            "model.pt",
+        ]
+        for preferred_name in preferred_names:
+            found = sorted(payload_dir.rglob(preferred_name))
+            if found:
+                return found[0]
+
+        candidates = sorted(payload_dir.rglob("*.pt")) + sorted(payload_dir.rglob("*.pth"))
+        return candidates[0] if candidates else None
 
     def get(self, stage: Stage, model_name: str, version: str = "latest") -> DownloadedModelBundle:
         model_slug = _slugify_model_name(model_name)
