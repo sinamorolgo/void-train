@@ -9,8 +9,8 @@
 
 ## Before
 
-![YAML Studio Before (Top)](./assets/studio-ux/studio-before-top.png)
-![YAML Studio Before (Bottom)](./assets/studio-ux/studio-before-bottom.png)
+![YAML Studio Before (Top)](../assets/studio-ux/studio-before-top.png)
+![YAML Studio Before (Bottom)](../assets/studio-ux/studio-before-bottom.png)
 
 관찰 이슈:
 
@@ -49,8 +49,8 @@
 
 ## After
 
-![YAML Studio After (Top)](./assets/studio-ux/studio-after-top.png)
-![YAML Studio After (Bottom)](./assets/studio-ux/studio-after-bottom.png)
+![YAML Studio After (Top)](../assets/studio-ux/studio-after-top.png)
+![YAML Studio After (Bottom)](../assets/studio-ux/studio-after-bottom.png)
 
 개선 결과:
 

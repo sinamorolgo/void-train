@@ -6,7 +6,7 @@
 
 학습 실행/진행 확인/MLflow 작업을 한 화면에서 처리합니다.
 
-![Operations Overview](./assets/web-usage/web-operations-overview.png)
+![Operations Overview](../assets/web-usage/web-operations-overview.png)
 
 핵심:
 
@@ -18,7 +18,7 @@
 
 코드 수정 없이 `training_catalog.yaml`을 검증/저장해 UI와 런타임을 동기화합니다.
 
-![YAML Catalog](./assets/web-usage/web-yaml-catalog.png)
+![YAML Catalog](../assets/web-usage/web-yaml-catalog.png)
 
 권장 순서:
 
@@ -78,7 +78,7 @@ YAML 전체를 직접 수정하지 않아도 task/registry를 폼으로 편집�
 
 `Model Serving` 하단에서 `registryModels` 기준 모델 목록을 보고 다운로드합니다.
 
-![Model Registry Browser](./assets/web-usage/web-model-registry-browser.png)
+![Model Registry Browser](../assets/web-usage/web-model-registry-browser.png)
 
 다운로드 절차:
 

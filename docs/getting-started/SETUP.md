@@ -82,7 +82,7 @@ pnpm dev
 
 접속: `http://127.0.0.1:5173`
 
-실제 UI 캡처 기반 사용 예시는 [WEB_USAGE_GUIDE.md](./WEB_USAGE_GUIDE.md) 참고.
+실제 UI 캡처 기반 사용 예시는 [WEB_USAGE_GUIDE.md](../guides/WEB_USAGE_GUIDE.md) 참고.
 
 ## 5) YAML 기반 런처 일원화 설정
 
@@ -255,7 +255,7 @@ curl -X POST http://127.0.0.1:8008/api/ftp-registry/upload-local \
 - 검증 후 `release`로 promote
 - 클라이언트는 FTP로 `LATEST` 파일 조회 후 버전 번들(`bundle.tar.gz`) 다운로드
 
-자세한 내용은 [FTP_MODEL_REGISTRY.md](./FTP_MODEL_REGISTRY.md) 참고.
+자세한 내용은 [FTP_MODEL_REGISTRY.md](../operations/FTP_MODEL_REGISTRY.md) 참고.
 
 ## 10) 체크리스트
 

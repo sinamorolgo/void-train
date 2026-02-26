@@ -109,10 +109,12 @@ tasks:
 
 ## 문서
 
-- [Setup](./docs/SETUP.md)
-- [Architecture](./docs/ARCHITECTURE.md)
-- [FTP Model Registry](./docs/FTP_MODEL_REGISTRY.md)
-- [E2E Report](./docs/E2E-REPORT.md)
-- [Web Usage Guide (with screenshots)](./docs/WEB_USAGE_GUIDE.md)
-- [YAML Studio UX Analysis](./docs/UX_ANALYSIS_YAML_STUDIO.md)
-- [YAML Studio Risk Analysis](./docs/RISK_ANALYSIS_YAML_STUDIO.md)
+- [Docs Index](./docs/README.md)
+- [Setup](./docs/getting-started/SETUP.md)
+- [Architecture](./docs/architecture/ARCHITECTURE.md)
+- [FTP Model Registry](./docs/operations/FTP_MODEL_REGISTRY.md)
+- [E2E Report](./docs/operations/E2E-REPORT.md)
+- [Web Usage Guide (with screenshots)](./docs/guides/WEB_USAGE_GUIDE.md)
+- [YAML Studio UX Analysis](./docs/analysis/UX_ANALYSIS_YAML_STUDIO.md)
+- [YAML Studio Risk Analysis](./docs/analysis/RISK_ANALYSIS_YAML_STUDIO.md)
+- [Current vs Airflow Analysis](./docs/analysis/CURRENT_VS_AIRFLOW.md)
