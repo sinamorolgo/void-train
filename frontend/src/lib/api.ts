@@ -4,6 +4,9 @@ import type {
   BaseTaskType,
   CatalogDocument,
   CatalogFormatResult,
+  CatalogStudioDocument,
+  CatalogStudioRegistryModel,
+  CatalogStudioTask,
   CatalogValidationResult,
   LocalModel,
   MlflowRunItem,
@@ -32,6 +35,10 @@ export const api = {
     const { data } = await client.get<CatalogDocument>('/catalog')
     return data
   },
+  getCatalogStudio: async (): Promise<CatalogStudioDocument> => {
+    const { data } = await client.get<CatalogStudioDocument>('/catalog/studio')
+    return data
+  },
   validateCatalog: async (content: string): Promise<CatalogValidationResult> => {
     const { data } = await client.post<CatalogValidationResult>('/catalog/validate', { content })
     return data
@@ -42,6 +49,14 @@ export const api = {
   },
   saveCatalog: async (payload: { content: string; createBackup: boolean }): Promise<CatalogDocument> => {
     const { data } = await client.post<CatalogDocument>('/catalog/save', payload)
+    return data
+  },
+  saveCatalogStudio: async (payload: {
+    tasks: CatalogStudioTask[]
+    registryModels: CatalogStudioRegistryModel[]
+    createBackup: boolean
+  }): Promise<CatalogStudioDocument> => {
+    const { data } = await client.post<CatalogStudioDocument>('/catalog/studio/save', payload)
     return data
   },
   startRun: async (taskType: TaskType, values: Record<string, unknown>): Promise<RunItem> => {

@@ -157,3 +157,45 @@ export interface CatalogValidationResult {
 export interface CatalogFormatResult extends CatalogValidationResult {
   content: string
 }
+
+export interface CatalogStudioTask {
+  taskType: string
+  enabled: boolean
+  title: string
+  description: string
+  baseTaskType: BaseTaskType
+  runnerStartMethod: 'python_script' | 'python_module'
+  runnerTarget: string
+  runnerTargetEnvVar: string | null
+  runnerCwd: string | null
+  mlflowMetric: string
+  mlflowMode: 'max' | 'min'
+  mlflowModelName: string
+  mlflowArtifactPath: string
+  fieldOrder: string[]
+  hiddenFields: string[]
+  fieldOverrides: Record<string, Record<string, unknown>>
+}
+
+export interface CatalogStudioRegistryModel {
+  id: string
+  title: string
+  description: string
+  taskType: BaseTaskType
+  modelName: string
+  defaultStage: RegistryStage
+  defaultVersion: string
+  defaultDestinationDir: string
+}
+
+export interface CatalogStudioDocument {
+  path: string
+  exists: boolean
+  modifiedAt: string | null
+  taskCount: number
+  registryModelCount: number
+  tasks: CatalogStudioTask[]
+  registryModels: CatalogStudioRegistryModel[]
+  saved?: boolean
+  backupPath?: string | null
+}

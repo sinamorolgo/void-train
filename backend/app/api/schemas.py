@@ -8,6 +8,7 @@ TaskType = str
 BaseTaskType = Literal["classification", "segmentation"]
 RegistryStage = Literal["dev", "release"]
 RegistryArtifact = Literal["bundle", "manifest", "standard_pytorch"]
+RunnerStartMethod = Literal["python_script", "python_module"]
 
 
 class StartRunRequest(BaseModel):
@@ -25,6 +26,42 @@ class ValidateCatalogRequest(BaseModel):
 
 class SaveCatalogRequest(BaseModel):
     content: str = Field(min_length=1)
+    createBackup: bool = True
+
+
+class CatalogStudioTaskItem(BaseModel):
+    taskType: str
+    enabled: bool = True
+    title: str
+    description: str = ""
+    baseTaskType: BaseTaskType
+    runnerStartMethod: RunnerStartMethod = "python_script"
+    runnerTarget: str
+    runnerTargetEnvVar: str | None = None
+    runnerCwd: str | None = None
+    mlflowMetric: str = "val_accuracy"
+    mlflowMode: Literal["max", "min"] = "max"
+    mlflowModelName: str
+    mlflowArtifactPath: str = "model"
+    fieldOrder: list[str] = Field(default_factory=list)
+    hiddenFields: list[str] = Field(default_factory=list)
+    fieldOverrides: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
+class CatalogStudioRegistryModelItem(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+    taskType: BaseTaskType
+    modelName: str
+    defaultStage: RegistryStage = "release"
+    defaultVersion: str = "latest"
+    defaultDestinationDir: str = "./backend/artifacts/downloads"
+
+
+class SaveCatalogStudioRequest(BaseModel):
+    tasks: list[CatalogStudioTaskItem] = Field(default_factory=list)
+    registryModels: list[CatalogStudioRegistryModelItem] = Field(default_factory=list)
     createBackup: bool = True
 
 

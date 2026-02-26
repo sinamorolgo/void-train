@@ -7,6 +7,8 @@ from typing import Any, Callable, cast
 from fastapi import APIRouter, HTTPException
 
 from app.api.schemas import (
+    CatalogStudioRegistryModelItem,
+    CatalogStudioTaskItem,
     DownloadFromFtpRequest,
     DownloadFromMlflowRequest,
     DownloadRegisteredFtpModelRequest,
@@ -16,6 +18,7 @@ from app.api.schemas import (
     PublishFtpModelRequest,
     PredictRequest,
     SaveCatalogRequest,
+    SaveCatalogStudioRequest,
     SelectBestRequest,
     StartFtpServerRequest,
     StartMlflowServingRequest,
@@ -142,6 +145,95 @@ def _registry_model_summary(item: RegistryModelDefinition) -> dict[str, Any]:
     }
 
 
+def _studio_task_payload(task: TaskDefinition) -> dict[str, Any]:
+    return {
+        "taskType": task.task_type,
+        "enabled": task.enabled,
+        "title": task.title,
+        "description": task.description,
+        "baseTaskType": task.base_task_type,
+        "runnerStartMethod": task.runner.start_method,
+        "runnerTarget": task.runner.target,
+        "runnerTargetEnvVar": task.runner.target_env_var,
+        "runnerCwd": task.runner.cwd,
+        "mlflowMetric": task.mlflow.metric,
+        "mlflowMode": task.mlflow.mode,
+        "mlflowModelName": task.mlflow.model_name,
+        "mlflowArtifactPath": task.mlflow.artifact_path,
+        "fieldOrder": list(task.field_order),
+        "hiddenFields": sorted(task.hidden_fields),
+        "fieldOverrides": task.field_overrides,
+    }
+
+
+def _studio_registry_payload(item: RegistryModelDefinition) -> dict[str, Any]:
+    return {
+        "id": item.model_id,
+        "title": item.title,
+        "description": item.description,
+        "taskType": item.task_type,
+        "modelName": item.model_name,
+        "defaultStage": item.default_stage,
+        "defaultVersion": item.default_version,
+        "defaultDestinationDir": item.default_destination_dir,
+    }
+
+
+def _catalog_studio_response(*, catalog: Any, exists: bool, source_path: Path) -> dict[str, Any]:
+    modified_at: str | None = None
+    if exists and source_path.exists():
+        modified_at = datetime.fromtimestamp(source_path.stat().st_mtime, tz=timezone.utc).isoformat()
+    tasks = [_studio_task_payload(task) for task in catalog.list_tasks()]
+    registry_models = [_studio_registry_payload(item) for item in catalog.list_registry_models()]
+    return {
+        "path": str(source_path),
+        "exists": exists,
+        "modifiedAt": modified_at,
+        "taskCount": len(tasks),
+        "registryModelCount": len(registry_models),
+        "tasks": tasks,
+        "registryModels": registry_models,
+    }
+
+
+def _build_task_raw_payload(item: CatalogStudioTaskItem) -> dict[str, Any]:
+    return {
+        "taskType": item.taskType,
+        "enabled": item.enabled,
+        "title": item.title,
+        "description": item.description,
+        "baseTaskType": item.baseTaskType,
+        "runner": {
+            "startMethod": item.runnerStartMethod,
+            "target": item.runnerTarget,
+            "targetEnvVar": item.runnerTargetEnvVar,
+            "cwd": item.runnerCwd,
+        },
+        "mlflow": {
+            "metric": item.mlflowMetric,
+            "mode": item.mlflowMode,
+            "modelName": item.mlflowModelName,
+            "artifactPath": item.mlflowArtifactPath,
+        },
+        "fieldOrder": [field for field in item.fieldOrder if field.strip()],
+        "hiddenFields": [field for field in item.hiddenFields if field.strip()],
+        "fieldOverrides": item.fieldOverrides,
+    }
+
+
+def _build_registry_raw_payload(item: CatalogStudioRegistryModelItem) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "title": item.title,
+        "description": item.description,
+        "taskType": item.taskType,
+        "modelName": item.modelName,
+        "defaultStage": item.defaultStage,
+        "defaultVersion": item.defaultVersion,
+        "defaultDestinationDir": item.defaultDestinationDir,
+    }
+
+
 def _registry_stage_snapshot(*, stage: StageType, model_name: str, include_versions: bool) -> dict[str, Any]:
     try:
         index = ftp_registry.get_model(stage=stage, model_name=model_name)
@@ -252,6 +344,21 @@ def get_catalog() -> dict[str, Any]:
     return _as_bad_request(_run)
 
 
+@router.get("/catalog/studio")
+def get_catalog_studio() -> dict[str, Any]:
+    def _run() -> dict[str, Any]:
+        source_path = settings.training_catalog_path
+        if source_path.exists():
+            parsed = parse_catalog_yaml(source_path.read_text(encoding="utf-8"), source=str(source_path))
+            catalog = validate_catalog_payload(parsed, source=str(source_path))
+            return _catalog_studio_response(catalog=catalog, exists=True, source_path=source_path)
+
+        catalog = get_task_catalog()
+        return _catalog_studio_response(catalog=catalog, exists=False, source_path=source_path)
+
+    return _as_bad_request(_run)
+
+
 @router.post("/catalog/validate")
 def validate_catalog(payload: ValidateCatalogRequest) -> dict[str, Any]:
     def _run() -> dict[str, Any]:
@@ -277,6 +384,35 @@ def format_catalog(payload: ValidateCatalogRequest) -> dict[str, Any]:
             "tasks": [_task_summary(task) for task in catalog.list_tasks()],
             "content": render_catalog_yaml(parsed),
         }
+
+    return _as_bad_request(_run)
+
+
+@router.post("/catalog/studio/save")
+def save_catalog_studio(payload: SaveCatalogStudioRequest) -> dict[str, Any]:
+    def _run() -> dict[str, Any]:
+        source_path = settings.training_catalog_path
+        raw_payload = {
+            "tasks": [_build_task_raw_payload(item) for item in payload.tasks],
+            "registryModels": [_build_registry_raw_payload(item) for item in payload.registryModels],
+        }
+        catalog = validate_catalog_payload(raw_payload, source="request.body")
+
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        backup_path: Path | None = None
+        if payload.createBackup and source_path.exists():
+            backup_stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            backup_path = source_path.with_suffix(f".{backup_stamp}.bak.yaml")
+            backup_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+        source_path.write_text(render_catalog_yaml(raw_payload), encoding="utf-8")
+        get_task_catalog.cache_clear()
+        get_task_catalog()
+
+        response = _catalog_studio_response(catalog=catalog, exists=True, source_path=source_path)
+        response["saved"] = True
+        response["backupPath"] = str(backup_path) if backup_path else None
+        return response
 
     return _as_bad_request(_run)
 

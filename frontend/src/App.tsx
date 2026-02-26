@@ -3,13 +3,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import './App.css'
 import { CatalogManagerPanel } from './components/CatalogManagerPanel'
+import { CatalogStudioPanel } from './components/CatalogStudioPanel'
 import { LaunchPanel } from './components/LaunchPanel'
 import { MlflowPanel } from './components/MlflowPanel'
 import { RunsPanel } from './components/RunsPanel'
 import { ServingPanel } from './components/ServingPanel'
 import { api, errorMessage } from './lib/api'
 import { buildDefaults } from './hooks/useSchemaDefaults'
-import type { CatalogValidationResult, TaskType } from './types'
+import type {
+  CatalogStudioRegistryModel,
+  CatalogStudioTask,
+  CatalogValidationResult,
+  TaskType,
+} from './types'
 
 interface Notice {
   level: 'info' | 'success' | 'error'
@@ -18,12 +24,17 @@ interface Notice {
   timestamp: number
 }
 
-type AppView = 'operations' | 'catalog'
+type AppView = 'operations' | 'catalog' | 'studio'
 const TAB_QUERY_KEY = 'tab'
 type CatalogValidationState = 'idle' | 'valid' | 'invalid'
+interface CatalogStudioDraft {
+  tasks: CatalogStudioTask[]
+  registryModels: CatalogStudioRegistryModel[]
+}
 
 function parseViewFromUrl(): AppView {
   const tab = new URLSearchParams(window.location.search).get(TAB_QUERY_KEY)
+  if (tab === 'studio') return 'studio'
   return tab === 'catalog' ? 'catalog' : 'operations'
 }
 
@@ -49,6 +60,10 @@ export default function App() {
   const [catalogValidationError, setCatalogValidationError] = useState<string | null>(null)
   const [catalogValidationState, setCatalogValidationState] = useState<CatalogValidationState>('idle')
   const [catalogValidatedAt, setCatalogValidatedAt] = useState<string | null>(null)
+  const [studioDraftOverride, setStudioDraftOverride] = useState<CatalogStudioDraft | null>(null)
+  const [studioBaselineOverride, setStudioBaselineOverride] = useState<CatalogStudioDraft | null>(null)
+  const [studioCreateBackup, setStudioCreateBackup] = useState(true)
+  const [studioSaveError, setStudioSaveError] = useState<string | null>(null)
   const [notices, setNotices] = useState<Notice[]>([])
 
   const pushNotice = (level: Notice['level'], message: string, detail?: string) => {
@@ -61,6 +76,11 @@ export default function App() {
     queryFn: api.getCatalog,
     refetchOnWindowFocus: false,
   })
+  const catalogStudioQuery = useQuery({
+    queryKey: ['catalog-studio'],
+    queryFn: api.getCatalogStudio,
+    refetchOnWindowFocus: false,
+  })
 
   const schemas = useMemo(() => schemasQuery.data ?? [], [schemasQuery.data])
   const catalogDraft = catalogDraftOverride ?? catalogQuery.data?.content ?? ''
@@ -68,6 +88,23 @@ export default function App() {
   const catalogTasks = catalogValidation?.tasks ?? catalogQuery.data?.tasks ?? []
   const catalogTaskCount = catalogValidation?.taskCount ?? catalogQuery.data?.taskCount ?? null
   const catalogDirty = catalogDraft !== catalogBaseline
+  const studioDraft = useMemo<CatalogStudioDraft>(
+    () =>
+      studioDraftOverride ?? {
+        tasks: catalogStudioQuery.data?.tasks ?? [],
+        registryModels: catalogStudioQuery.data?.registryModels ?? [],
+      },
+    [studioDraftOverride, catalogStudioQuery.data?.tasks, catalogStudioQuery.data?.registryModels],
+  )
+  const studioBaseline = useMemo<CatalogStudioDraft>(
+    () =>
+      studioBaselineOverride ?? {
+        tasks: catalogStudioQuery.data?.tasks ?? [],
+        registryModels: catalogStudioQuery.data?.registryModels ?? [],
+      },
+    [studioBaselineOverride, catalogStudioQuery.data?.tasks, catalogStudioQuery.data?.registryModels],
+  )
+  const studioDirty = JSON.stringify(studioDraft) !== JSON.stringify(studioBaseline)
 
   const defaultFormByTask = useMemo(() => {
     const map: Record<string, Record<string, unknown>> = {}
@@ -202,6 +239,38 @@ export default function App() {
     },
   })
 
+  const saveCatalogStudioMutation = useMutation({
+    mutationFn: () =>
+      api.saveCatalogStudio({
+        tasks: studioDraft.tasks,
+        registryModels: studioDraft.registryModels,
+        createBackup: studioCreateBackup,
+      }),
+    onSuccess: (saved) => {
+      const syncedDraft = {
+        tasks: saved.tasks,
+        registryModels: saved.registryModels,
+      }
+      setStudioDraftOverride(syncedDraft)
+      setStudioBaselineOverride(syncedDraft)
+      setStudioSaveError(null)
+      pushNotice(
+        'success',
+        'Studio catalog saved',
+        saved.backupPath ? `Backup created: ${saved.backupPath}` : 'Saved without backup',
+      )
+      queryClient.invalidateQueries({ queryKey: ['catalog-studio'] })
+      queryClient.invalidateQueries({ queryKey: ['catalog'] })
+      queryClient.invalidateQueries({ queryKey: ['schemas'] })
+      queryClient.invalidateQueries({ queryKey: ['ftp-registry-catalog-models'] })
+    },
+    onError: (error) => {
+      const message = errorMessage(error)
+      setStudioSaveError(message)
+      pushNotice('error', 'Studio save failed', message)
+    },
+  })
+
   const stopMutation = useMutation({
     mutationFn: (runId: string) => api.stopRun(runId),
     onSuccess: (run) => {
@@ -238,7 +307,8 @@ export default function App() {
     servingMutation.isPending ||
     validateCatalogMutation.isPending ||
     formatCatalogMutation.isPending ||
-    saveCatalogMutation.isPending
+    saveCatalogMutation.isPending ||
+    saveCatalogStudioMutation.isPending
 
   const headline = useMemo(() => {
     const running = (runsQuery.data ?? []).filter((run) => run.status === 'running').length
@@ -259,19 +329,22 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!catalogDirty) return undefined
+    if (!(catalogDirty || studioDirty)) return undefined
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault()
       event.returnValue = ''
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [catalogDirty])
+  }, [catalogDirty, studioDirty])
 
   const handleViewChange = (nextView: AppView) => {
     if (nextView === activeView) return
-    if (activeView === 'catalog' && catalogDirty) {
-      const shouldLeave = window.confirm('YAML 변경사항이 저장되지 않았습니다. 탭을 이동하시겠어요?')
+    const hasUnsaved =
+      (activeView === 'catalog' && catalogDirty) ||
+      (activeView === 'studio' && studioDirty)
+    if (hasUnsaved) {
+      const shouldLeave = window.confirm('저장되지 않은 YAML 변경사항이 있습니다. 탭을 이동하시겠어요?')
       if (!shouldLeave) return
     }
     setActiveView(nextView)
@@ -333,6 +406,19 @@ export default function App() {
           YAML Catalog
           {catalogDirty ? ' •' : ''}
         </button>
+        <button
+          id="tab-studio"
+          role="tab"
+          type="button"
+          aria-selected={activeView === 'studio'}
+          aria-controls="panel-studio"
+          aria-label={`YAML Studio${studioDirty ? ' (unsaved changes)' : ''}`}
+          className={`view-tab ${activeView === 'studio' ? 'active' : ''}`}
+          onClick={() => handleViewChange('studio')}
+        >
+          YAML Studio
+          {studioDirty ? ' •' : ''}
+        </button>
       </nav>
 
       <main id="main-content">
@@ -376,6 +462,46 @@ export default function App() {
                 setCatalogValidationState('idle')
                 setCatalogValidatedAt(null)
                 catalogQuery.refetch()
+              }}
+            />
+          </section>
+        ) : activeView === 'studio' ? (
+          <section id="panel-studio" role="tabpanel" aria-labelledby="tab-studio">
+            <CatalogStudioPanel
+              catalogPath={catalogStudioQuery.data?.path ?? 'Loading…'}
+              modifiedAt={catalogStudioQuery.data?.modifiedAt ?? null}
+              tasks={studioDraft.tasks}
+              registryModels={studioDraft.registryModels}
+              dirty={studioDirty}
+              createBackup={studioCreateBackup}
+              isLoading={catalogStudioQuery.isLoading}
+              isSaving={saveCatalogStudioMutation.isPending}
+              saveError={studioSaveError}
+              onCreateBackupChange={setStudioCreateBackup}
+              onTasksChange={(nextTasks) => {
+                setStudioSaveError(null)
+                setStudioDraftOverride({
+                  ...studioDraft,
+                  tasks: nextTasks,
+                })
+              }}
+              onRegistryModelsChange={(nextRegistryModels) => {
+                setStudioSaveError(null)
+                setStudioDraftOverride({
+                  ...studioDraft,
+                  registryModels: nextRegistryModels,
+                })
+              }}
+              onSave={() => saveCatalogStudioMutation.mutate()}
+              onResetDraft={() => {
+                setStudioSaveError(null)
+                setStudioDraftOverride(studioBaseline)
+              }}
+              onReload={() => {
+                setStudioSaveError(null)
+                setStudioDraftOverride(null)
+                setStudioBaselineOverride(null)
+                catalogStudioQuery.refetch()
               }}
             />
           </section>
