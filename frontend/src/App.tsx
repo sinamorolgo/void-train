@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import './App.css'
+import { AppHero } from './components/app-shell/AppHero'
+import { NoticeStack, type NoticeItem } from './components/app-shell/NoticeStack'
+import { WorkspaceTabs } from './components/app-shell/WorkspaceTabs'
 import { CatalogManagerPanel } from './components/CatalogManagerPanel'
 import { CatalogStudioPanel } from './components/CatalogStudioPanel'
 import { LaunchPanel } from './components/LaunchPanel'
@@ -17,13 +20,6 @@ import type {
   CatalogValidationResult,
   TaskType,
 } from './types'
-
-interface Notice {
-  level: 'info' | 'success' | 'error'
-  message: string
-  detail?: string
-  timestamp: number
-}
 
 type CatalogValidationState = 'idle' | 'valid' | 'invalid'
 interface CatalogStudioDraft {
@@ -46,9 +42,9 @@ export default function App() {
   const [studioBaselineOverride, setStudioBaselineOverride] = useState<CatalogStudioDraft | null>(null)
   const [studioCreateBackup, setStudioCreateBackup] = useState(true)
   const [studioSaveError, setStudioSaveError] = useState<string | null>(null)
-  const [notices, setNotices] = useState<Notice[]>([])
+  const [notices, setNotices] = useState<NoticeItem[]>([])
 
-  const pushNotice = (level: Notice['level'], message: string, detail?: string) => {
+  const pushNotice = (level: NoticeItem['level'], message: string, detail?: string) => {
     setNotices((prev) => [{ level, message, detail, timestamp: Date.now() }, ...prev].slice(0, 6))
   }
 
@@ -315,71 +311,20 @@ export default function App() {
       <a className="skip-link" href="#main-content">
         Skip to Main Content
       </a>
-      <header className="hero">
-        <div>
-          <p className="eyebrow">Void Train Manager</p>
-          <h1>PyTorch Trainer Control Deck</h1>
-          <p>
-            TensorBoard 기반 워크플로를 유지하면서 MLflow 중심 운영으로 전환할 수 있는 통합 UI입니다.
-          </p>
-        </div>
-        <div className="hero-stats">
-          <article>
-            <span>Running</span>
-            <strong>{headline.running}</strong>
-          </article>
-          <article>
-            <span>Completed</span>
-            <strong>{headline.finished}</strong>
-          </article>
-          <article>
-            <span>Task</span>
-            <strong>{(selectedSchema?.title ?? selectedTask) || '-'}</strong>
-          </article>
-        </div>
-      </header>
+      <AppHero
+        running={headline.running}
+        completed={headline.finished}
+        taskLabel={(selectedSchema?.title ?? selectedTask) || '-'}
+      />
 
       {schemasQuery.isError ? <p className="error-banner">Schema load failed: {errorMessage(schemasQuery.error)}</p> : null}
 
-      <nav className="view-tabs" aria-label="Workspace tabs" role="tablist">
-        <button
-          id="tab-operations"
-          role="tab"
-          type="button"
-          aria-selected={activeView === 'operations'}
-          aria-controls="panel-operations"
-          className={`view-tab ${activeView === 'operations' ? 'active' : ''}`}
-          onClick={() => handleViewChange('operations')}
-        >
-          Operations
-        </button>
-        <button
-          id="tab-catalog"
-          role="tab"
-          type="button"
-          aria-selected={activeView === 'catalog'}
-          aria-controls="panel-catalog"
-          aria-label={`YAML Catalog${catalogDirty ? ' (unsaved changes)' : ''}`}
-          className={`view-tab ${activeView === 'catalog' ? 'active' : ''}`}
-          onClick={() => handleViewChange('catalog')}
-        >
-          YAML Catalog
-          {catalogDirty ? ' •' : ''}
-        </button>
-        <button
-          id="tab-studio"
-          role="tab"
-          type="button"
-          aria-selected={activeView === 'studio'}
-          aria-controls="panel-studio"
-          aria-label={`YAML Studio${studioDirty ? ' (unsaved changes)' : ''}`}
-          className={`view-tab ${activeView === 'studio' ? 'active' : ''}`}
-          onClick={() => handleViewChange('studio')}
-        >
-          YAML Studio
-          {studioDirty ? ' •' : ''}
-        </button>
-      </nav>
+      <WorkspaceTabs
+        activeView={activeView}
+        catalogDirty={catalogDirty}
+        studioDirty={studioDirty}
+        onViewChange={handleViewChange}
+      />
 
       <main id="main-content">
         {activeView === 'catalog' ? (
@@ -533,18 +478,7 @@ export default function App() {
         )}
       </main>
 
-      <aside className="notice-stack" aria-live="polite" aria-relevant="additions text">
-        {notices.map((notice) => (
-          <article
-            key={notice.timestamp}
-            className={`notice ${notice.level}`}
-            role={notice.level === 'error' ? 'alert' : 'status'}
-          >
-            <strong>{notice.message}</strong>
-            {notice.detail ? <pre>{notice.detail}</pre> : null}
-          </article>
-        ))}
-      </aside>
+      <NoticeStack notices={notices} />
     </div>
   )
 }
