@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 import yaml
 
+from app.core.catalog_repository import get_catalog_repository
 from app.core.settings import get_settings
 from app.core.train_config import TaskType, dataclass_schema, parse_bool
 
@@ -719,5 +720,16 @@ class TaskCatalogService:
 @lru_cache(maxsize=1)
 def get_task_catalog() -> TaskCatalog:
     settings = get_settings()
-    service = TaskCatalogService(settings.training_catalog_path)
-    return service.load()
+    repository = get_catalog_repository()
+    revision = repository.seed_if_empty(
+        seed_file_path=settings.training_catalog_path,
+        default_content=render_catalog_yaml(default_catalog_payload()),
+    )
+    payload = parse_catalog_yaml(
+        revision.content,
+        source=f"training_catalog_revisions:{revision.revision_id}",
+    )
+    return validate_catalog_payload(
+        payload,
+        source=f"training_catalog_revisions:{revision.revision_id}",
+    )

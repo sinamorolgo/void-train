@@ -4,7 +4,8 @@
 
 ## 1) 어디를 수정하나
 
-- 기본 catalog 파일: `backend/config/training_catalog.yaml`
+- 저장소: PostgreSQL `training_catalog_revisions` (웹 저장 시 DB revision 생성)
+- 초기 seed 파일: `backend/config/training_catalog.yaml` (DB 비어있을 때만)
 - 웹에서 반영 순서:
 1. `YAML Catalog` 탭에서 내용 수정
 2. `Validate YAML`

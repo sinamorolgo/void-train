@@ -84,18 +84,21 @@ pnpm dev
 
 실제 UI 캡처 기반 사용 예시는 [WEB_USAGE_GUIDE.md](../guides/WEB_USAGE_GUIDE.md) 참고.
 
-## 5) YAML 기반 런처 일원화 설정
+## 5) YAML 기반 런처 일원화 설정 (DB 저장)
 
-UI와 백엔드는 아래 파일을 단일 소스로 사용합니다.
-
-- `backend/config/training_catalog.yaml`
-
-`.env`에서 경로만 바꿔서 다른 설정 파일로 교체할 수 있습니다.
+UI와 백엔드는 PostgreSQL `training_catalog_revisions`를 단일 소스로 사용합니다.
+`backend/config/training_catalog.yaml`은 DB가 비어있을 때 seed 용도로만 읽습니다.
 
 ```bash
 cp .env.example .env
 # 필요 시 수정
 TRAINING_CATALOG_PATH=./backend/config/training_catalog.yaml
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
+POSTGRES_DB=void_train_manager
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+# 또는 CATALOG_DATABASE_URL=postgresql://...
 ```
 
 카탈로그에서 조정 가능한 항목:

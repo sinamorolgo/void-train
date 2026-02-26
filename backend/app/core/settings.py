@@ -24,6 +24,13 @@ class Settings:
     ftp_default_username: str
     ftp_default_password: str
     training_catalog_path: Path
+    catalog_database_url: str | None
+    catalog_db_host: str
+    catalog_db_port: int
+    catalog_db_name: str
+    catalog_db_user: str
+    catalog_db_password: str
+    catalog_db_sslmode: str
     runs_log_tail: int
 
     @property
@@ -74,5 +81,12 @@ def get_settings() -> Settings:
         training_catalog_path=Path(
             os.getenv("TRAINING_CATALOG_PATH", str(backend_root / "config" / "training_catalog.yaml"))
         ).expanduser().resolve(),
+        catalog_database_url=os.getenv("CATALOG_DATABASE_URL"),
+        catalog_db_host=os.getenv("POSTGRES_HOST", "127.0.0.1"),
+        catalog_db_port=int(os.getenv("POSTGRES_PORT", "5432")),
+        catalog_db_name=os.getenv("POSTGRES_DB", "void_train_manager"),
+        catalog_db_user=os.getenv("POSTGRES_USER", "postgres"),
+        catalog_db_password=os.getenv("POSTGRES_PASSWORD", "postgres"),
+        catalog_db_sslmode=os.getenv("POSTGRES_SSLMODE", "disable"),
         runs_log_tail=int(os.getenv("RUNS_LOG_TAIL", "200")),
     )

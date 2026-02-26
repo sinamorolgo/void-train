@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from pathlib import Path
 import shutil
 import tempfile
@@ -20,6 +19,7 @@ from app.api.schemas import (
     PublishBestFtpModelRequest,
     PublishFtpModelRequest,
     PredictRequest,
+    RestoreCatalogRevisionRequest,
     SaveCatalogRequest,
     SaveCatalogStudioRequest,
     SelectBestRequest,
@@ -30,12 +30,13 @@ from app.api.schemas import (
     StopMlflowServingRequest,
     ValidateCatalogRequest,
 )
+from app.core.catalog_repository import CatalogRevision, get_catalog_repository
 from app.core.task_catalog import (
+    default_catalog_payload,
     RegistryModelDefinition,
     TaskDefinition,
     get_task_catalog,
     parse_catalog_yaml,
-    read_catalog_text,
     render_catalog_yaml,
     validate_catalog_payload,
 )
@@ -205,16 +206,30 @@ def _studio_registry_payload(item: RegistryModelDefinition) -> dict[str, Any]:
     }
 
 
-def _catalog_studio_response(*, catalog: Any, exists: bool, source_path: Path) -> dict[str, Any]:
-    modified_at: str | None = None
-    if exists and source_path.exists():
-        modified_at = datetime.fromtimestamp(source_path.stat().st_mtime, tz=timezone.utc).isoformat()
+def _catalog_source_path(revision: CatalogRevision) -> str:
+    return f"postgres://training_catalog_revisions/{revision.revision_id}"
+
+
+def _catalog_repo():
+    return get_catalog_repository()
+
+
+def _latest_catalog_revision() -> CatalogRevision:
+    return _catalog_repo().seed_if_empty(
+        seed_file_path=settings.training_catalog_path,
+        default_content=render_catalog_yaml(default_catalog_payload()),
+    )
+
+
+def _catalog_studio_response(*, catalog: Any, revision: CatalogRevision) -> dict[str, Any]:
     tasks = [_studio_task_payload(task) for task in catalog.list_tasks()]
     registry_models = [_studio_registry_payload(item) for item in catalog.list_registry_models()]
     return {
-        "path": str(source_path),
-        "exists": exists,
-        "modifiedAt": modified_at,
+        "path": _catalog_source_path(revision),
+        "exists": True,
+        "modifiedAt": revision.created_at.isoformat(),
+        "revisionId": revision.revision_id,
+        "revisionSource": revision.source,
         "taskCount": len(tasks),
         "registryModelCount": len(registry_models),
         "tasks": tasks,
@@ -325,17 +340,17 @@ def _parse_form_bool(value: str, *, field_name: str) -> bool:
     raise ValueError(f"Invalid boolean value for {field_name}: {value!r}")
 
 
-def _catalog_payload_response(*, content: str, exists: bool, source_path: Path) -> dict[str, Any]:
-    parsed = parse_catalog_yaml(content, source=str(source_path))
-    catalog = validate_catalog_payload(parsed, source=str(source_path))
-    modified_at: str | None = None
-    if exists:
-        modified_at = datetime.fromtimestamp(source_path.stat().st_mtime, tz=timezone.utc).isoformat()
+def _catalog_payload_response(*, revision: CatalogRevision) -> dict[str, Any]:
+    source = _catalog_source_path(revision)
+    parsed = parse_catalog_yaml(revision.content, source=source)
+    catalog = validate_catalog_payload(parsed, source=source)
     return {
-        "path": str(source_path),
-        "exists": exists,
-        "modifiedAt": modified_at,
-        "content": content,
+        "path": source,
+        "exists": True,
+        "modifiedAt": revision.created_at.isoformat(),
+        "revisionId": revision.revision_id,
+        "revisionSource": revision.source,
+        "content": revision.content,
         "taskCount": len(catalog.list_tasks()),
         "tasks": [_task_summary(task) for task in catalog.list_tasks()],
         "registryModelCount": len(catalog.list_registry_models()),
@@ -350,6 +365,7 @@ def health() -> dict[str, Any]:
         "defaultMlflowTrackingUri": settings.default_mlflow_tracking_uri,
         "defaultMlflowExperiment": settings.default_mlflow_experiment,
         "trainingCatalogPath": str(settings.training_catalog_path),
+        "trainingCatalogStorage": "postgres",
     }
 
 
@@ -374,8 +390,8 @@ def registry_models() -> dict[str, Any]:
 @router.get("/catalog")
 def get_catalog() -> dict[str, Any]:
     def _run() -> dict[str, Any]:
-        content, exists = read_catalog_text(settings.training_catalog_path)
-        return _catalog_payload_response(content=content, exists=exists, source_path=settings.training_catalog_path)
+        revision = _latest_catalog_revision()
+        return _catalog_payload_response(revision=revision)
 
     return _as_bad_request(_run)
 
@@ -383,14 +399,31 @@ def get_catalog() -> dict[str, Any]:
 @router.get("/catalog/studio")
 def get_catalog_studio() -> dict[str, Any]:
     def _run() -> dict[str, Any]:
-        source_path = settings.training_catalog_path
-        if source_path.exists():
-            parsed = parse_catalog_yaml(source_path.read_text(encoding="utf-8"), source=str(source_path))
-            catalog = validate_catalog_payload(parsed, source=str(source_path))
-            return _catalog_studio_response(catalog=catalog, exists=True, source_path=source_path)
+        revision = _latest_catalog_revision()
+        parsed = parse_catalog_yaml(revision.content, source=_catalog_source_path(revision))
+        catalog = validate_catalog_payload(parsed, source=_catalog_source_path(revision))
+        return _catalog_studio_response(catalog=catalog, revision=revision)
 
-        catalog = get_task_catalog()
-        return _catalog_studio_response(catalog=catalog, exists=False, source_path=source_path)
+    return _as_bad_request(_run)
+
+
+@router.get("/catalog/history")
+def get_catalog_history(limit: int = 30) -> dict[str, Any]:
+    def _run() -> dict[str, Any]:
+        _latest_catalog_revision()
+        revisions = _catalog_repo().list_revisions(limit=limit)
+        return {
+            "storage": "postgres",
+            "items": [
+                {
+                    "revisionId": item.revision_id,
+                    "source": item.source,
+                    "createdAt": item.created_at.isoformat(),
+                    "checksum": item.checksum,
+                }
+                for item in revisions
+            ],
+        }
 
     return _as_bad_request(_run)
 
@@ -427,27 +460,23 @@ def format_catalog(payload: ValidateCatalogRequest) -> dict[str, Any]:
 @router.post("/catalog/studio/save")
 def save_catalog_studio(payload: SaveCatalogStudioRequest) -> dict[str, Any]:
     def _run() -> dict[str, Any]:
-        source_path = settings.training_catalog_path
         raw_payload = {
             "tasks": [_build_task_raw_payload(item) for item in payload.tasks],
             "registryModels": [_build_registry_raw_payload(item) for item in payload.registryModels],
         }
         catalog = validate_catalog_payload(raw_payload, source="request.body")
-
-        source_path.parent.mkdir(parents=True, exist_ok=True)
-        backup_path: Path | None = None
-        if payload.createBackup and source_path.exists():
-            backup_stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-            backup_path = source_path.with_suffix(f".{backup_stamp}.bak.yaml")
-            backup_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
-
-        source_path.write_text(render_catalog_yaml(raw_payload), encoding="utf-8")
+        previous = _latest_catalog_revision()
+        saved_revision = _catalog_repo().save(
+            render_catalog_yaml(raw_payload),
+            source="catalog_studio.save",
+        )
         get_task_catalog.cache_clear()
         get_task_catalog()
 
-        response = _catalog_studio_response(catalog=catalog, exists=True, source_path=source_path)
+        response = _catalog_studio_response(catalog=catalog, revision=saved_revision)
         response["saved"] = True
-        response["backupPath"] = str(backup_path) if backup_path else None
+        response["backupRevisionId"] = previous.revision_id if payload.createBackup else None
+        response["backupPath"] = f"revision:{previous.revision_id}" if payload.createBackup else None
         return response
 
     return _as_bad_request(_run)
@@ -456,29 +485,35 @@ def save_catalog_studio(payload: SaveCatalogStudioRequest) -> dict[str, Any]:
 @router.post("/catalog/save")
 def save_catalog(payload: SaveCatalogRequest) -> dict[str, Any]:
     def _run() -> dict[str, Any]:
-        source_path = settings.training_catalog_path
         parsed = parse_catalog_yaml(payload.content, source="request.body.content")
         catalog = validate_catalog_payload(parsed, source="request.body.content")
-
-        source_path.parent.mkdir(parents=True, exist_ok=True)
-        backup_path: Path | None = None
-        if payload.createBackup and source_path.exists():
-            backup_stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-            backup_path = source_path.with_suffix(f".{backup_stamp}.bak.yaml")
-            backup_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
-
-        source_path.write_text(render_catalog_yaml(parsed), encoding="utf-8")
+        previous = _latest_catalog_revision()
+        saved_revision = _catalog_repo().save(
+            render_catalog_yaml(parsed),
+            source="catalog.save",
+        )
         get_task_catalog.cache_clear()
         get_task_catalog()
 
-        response = _catalog_payload_response(
-            content=source_path.read_text(encoding="utf-8"),
-            exists=True,
-            source_path=source_path,
-        )
+        response = _catalog_payload_response(revision=saved_revision)
         response["saved"] = True
-        response["backupPath"] = str(backup_path) if backup_path else None
+        response["backupRevisionId"] = previous.revision_id if payload.createBackup else None
+        response["backupPath"] = f"revision:{previous.revision_id}" if payload.createBackup else None
         response["taskCount"] = len(catalog.list_tasks())
+        return response
+
+    return _as_bad_request(_run)
+
+
+@router.post("/catalog/restore")
+def restore_catalog(payload: RestoreCatalogRevisionRequest) -> dict[str, Any]:
+    def _run() -> dict[str, Any]:
+        revision = _catalog_repo().restore(payload.revisionId)
+        get_task_catalog.cache_clear()
+        get_task_catalog()
+        response = _catalog_payload_response(revision=revision)
+        response["saved"] = True
+        response["restoredFromRevisionId"] = payload.revisionId
         return response
 
     return _as_bad_request(_run)

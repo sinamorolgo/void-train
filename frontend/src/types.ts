@@ -167,11 +167,14 @@ export interface CatalogDocument {
   path: string
   exists: boolean
   modifiedAt: string | null
+  revisionId?: number
+  revisionSource?: string
   content: string
   taskCount: number
   tasks: CatalogTaskSummary[]
   saved?: boolean
   backupPath?: string | null
+  backupRevisionId?: number | null
 }
 
 export interface CatalogValidationResult {
@@ -219,10 +222,20 @@ export interface CatalogStudioDocument {
   path: string
   exists: boolean
   modifiedAt: string | null
+  revisionId?: number
+  revisionSource?: string
   taskCount: number
   registryModelCount: number
   tasks: CatalogStudioTask[]
   registryModels: CatalogStudioRegistryModel[]
   saved?: boolean
   backupPath?: string | null
+  backupRevisionId?: number | null
+}
+
+export interface CatalogHistoryItem {
+  revisionId: number
+  source: string
+  createdAt: string
+  checksum: string
 }

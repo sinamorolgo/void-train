@@ -2,7 +2,8 @@
 
 PyTorch 학습(분류/세그)을 웹 UI로 실행하고 MLflow 중심으로 추적/선택/서빙까지 연결하는 로컬 MLOps 도구입니다.
 
-학습 런처 UI/백엔드는 `backend/config/training_catalog.yaml` 하나로 일원화되어 동작합니다.
+학습 런처 UI/백엔드는 PostgreSQL `training_catalog_revisions` 테이블을 단일 소스로 사용합니다.
+초기 부트스트랩 시에만 `backend/config/training_catalog.yaml`를 seed 용도로 읽습니다.
 
 모델 배포는 UI의 `Model Serving` 섹션에서 `.pth/.pt`를 FTP 레지스트리에 등록하고,
 선택적으로 PyTorch 표준 아티팩트(`model-standard.pt`)로 변환 등록할 수 있습니다.
@@ -11,7 +12,7 @@ PyTorch 학습(분류/세그)을 웹 UI로 실행하고 MLflow 중심으로 추�
 
 ## 최근 반영 사항
 
-- `backend/config/training_catalog.yaml` 단일 파일로 다음을 일원화:
+- PostgreSQL catalog revision 단일 저장소로 다음을 일원화:
   - 분류/세그 학습 시작 방식(`python_script`/`python_module`)
   - CLI 인자 정의(필수/기본값/검증/설명/UI 라벨)
   - 웹 폼 렌더링 순서/그룹/도움말
@@ -63,8 +64,9 @@ pnpm dev
 
 ## 런처 설정 일원화
 
-- 단일 설정 파일: `backend/config/training_catalog.yaml`
-- 경로 오버라이드: `.env`의 `TRAINING_CATALOG_PATH`
+- 단일 저장소: PostgreSQL `training_catalog_revisions`
+- 초기 seed 파일: `.env`의 `TRAINING_CATALOG_PATH` (초기 1회 또는 DB 비어있을 때만 사용)
+- DB 연결: `.env`의 `CATALOG_DATABASE_URL` 또는 `POSTGRES_*`
 - `.env` 예시: `.env.example`
 - 변경 가능한 항목:
   - UI에 노출할 task 목록/이름/설명
@@ -100,7 +102,7 @@ tasks:
 
 - `extraFields`는 런처 UI 폼에 자동 노출되고, `runs/start` 시 CLI 인자로 직렬화되어 전달됩니다.
 - 외부 스크립트가 내부 dataclass 기본 인자까지 받지 않는 경우 `hiddenFields`/`fieldOrder`와 함께 스크립트 인자 규약을 맞춰 사용하세요.
-- 코드 수정 없이 `YAML Studio -> Advanced Fields`에서 `fieldOverrides`/`extraFields`를 편집해 반영할 수 있습니다.
+- 코드 수정 없이 `YAML Studio -> Advanced Fields`에서 `fieldOverrides`/`extraFields`를 편집해 DB revision으로 반영할 수 있습니다.
 
 ## FTP 등록 방식 (신규)
 

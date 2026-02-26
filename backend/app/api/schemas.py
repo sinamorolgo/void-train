@@ -29,6 +29,10 @@ class SaveCatalogRequest(BaseModel):
     createBackup: bool = True
 
 
+class RestoreCatalogRevisionRequest(BaseModel):
+    revisionId: int = Field(ge=1)
+
+
 class CatalogStudioExtraFieldItem(BaseModel):
     name: str
     valueType: Literal["str", "int", "float", "bool"] = "str"

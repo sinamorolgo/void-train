@@ -1,0 +1,4 @@
+interface:
+  display_name: "Void Setup/Test Workflow"
+  short_description: "One-command setup and test workflow for void-train-manager"
+  default_prompt: "Use this skill to prepare env, run smoke tests, and verify frontend/backend quickly."

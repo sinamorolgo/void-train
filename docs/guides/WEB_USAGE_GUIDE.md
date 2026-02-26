@@ -47,7 +47,7 @@
 - `Format YAML`
 - `Save & Apply`
 
-위 3단계로 `training_catalog.yaml` 변경을 검증하고 런타임에 즉시 반영할 수 있습니다.
+위 3단계로 YAML 변경을 검증하고 PostgreSQL catalog revision에 즉시 반영할 수 있습니다.
 
 ## 5) YAML Studio (Easy Mode)
 

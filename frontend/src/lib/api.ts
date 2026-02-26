@@ -4,6 +4,7 @@ import type {
   BaseTaskType,
   CatalogDocument,
   CatalogFormatResult,
+  CatalogHistoryItem,
   CatalogStudioDocument,
   CatalogStudioRegistryModel,
   CatalogStudioTask,
@@ -58,6 +59,16 @@ export const api = {
     createBackup: boolean
   }): Promise<CatalogStudioDocument> => {
     const { data } = await client.post<CatalogStudioDocument>('/catalog/studio/save', payload)
+    return data
+  },
+  getCatalogHistory: async (limit = 30): Promise<CatalogHistoryItem[]> => {
+    const { data } = await client.get<{ storage: string; items: CatalogHistoryItem[] }>('/catalog/history', {
+      params: { limit },
+    })
+    return data.items
+  },
+  restoreCatalogRevision: async (revisionId: number): Promise<CatalogDocument> => {
+    const { data } = await client.post<CatalogDocument>('/catalog/restore', { revisionId })
     return data
   },
   startRun: async (taskType: TaskType, values: Record<string, unknown>): Promise<RunItem> => {
