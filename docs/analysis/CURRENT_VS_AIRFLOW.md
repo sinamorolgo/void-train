@@ -13,7 +13,7 @@
 - 트리거: 웹 UI/API에서 수동 실행 (`/api/runs/start`)
 - 실행 엔진: 백엔드에서 Python subprocess 직접 실행
 - 상태 저장: 프로세스 상태/로그를 앱 메모리에서 관리
-- 관측: MLflow/TensorBoard + UI polling
+- 관측: MLflow + UI polling
 - 설정 단일화: `backend/config/training_catalog.yaml` 중심
 
 근거 코드/문서:
@@ -100,7 +100,7 @@ Airflow 기준으로 바꾸면 일반적으로 다음이 핵심입니다.
 
 ### Q1) 지금 상태에서 진행상황은 어떤 식으로 보나?
 
-현재는 Airflow Task UI가 아니라, 앱 자체 run manager + MLflow/TensorBoard를 함께 봅니다.
+현재는 Airflow Task UI가 아니라, 앱 자체 run manager + MLflow를 함께 봅니다.
 
 - 웹 UI `Live Runs`
   - `GET /api/runs`를 약 1.5초 간격으로 polling
@@ -110,7 +110,6 @@ Airflow 기준으로 바꾸면 일반적으로 다음이 핵심입니다.
   - `GET /api/runs/{run_id}`
 - 실험 지표/아티팩트
   - `MLflow Ops`(약 3초 polling) 또는 MLflow UI에서 metric/artifact 확인
-  - TensorBoard 이벤트 파일은 `tensorboard_dir`에 기록
 
 주의:
 

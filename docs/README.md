@@ -18,10 +18,10 @@
 ## Guides
 
 - [Web Usage Guide (with screenshots)](./guides/WEB_USAGE_GUIDE.md)
+- [Train.py Path & YAML Help](./guides/TRAIN_PY_YAML_HELP.md)
 
 ## Analysis
 
 - [Current vs Airflow Analysis](./analysis/CURRENT_VS_AIRFLOW.md)
 - [YAML Studio UX Analysis](./analysis/UX_ANALYSIS_YAML_STUDIO.md)
 - [YAML Studio Risk Analysis](./analysis/RISK_ANALYSIS_YAML_STUDIO.md)
-

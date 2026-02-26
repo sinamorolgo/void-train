@@ -58,7 +58,7 @@ export function MlflowPanel({
   const rows = useMemo(() => runs.slice(0, 8), [runs])
 
   return (
-    <SectionCard title="MLflow Ops" subtitle="베스트 모델 선택, 등록, TensorBoard 로그 마이그레이션을 관리합니다.">
+    <SectionCard title="MLflow Ops" subtitle="베스트 런 선택, 모델 등록, 최근 런 확인 등 MLflow 운영 작업을 관리합니다.">
       <div className="mlflow-grid">
         <div className="mini-card">
           <h3>Best Model Picker</h3>

@@ -9,8 +9,8 @@ export function AppHero({ running, completed, taskLabel }: AppHeroProps) {
     <header className="hero">
       <div className="hero-copy">
         <p className="eyebrow">Void Train Manager</p>
-        <h1>PyTorch Trainer Control Deck</h1>
-        <p>TensorBoard 기반 워크플로를 유지하면서 MLflow 중심 운영으로 전환할 수 있는 통합 UI입니다.</p>
+        <h1>Control Deck</h1>
+        <p>MLflow 기반 학습 실행, 추적, 모델 운영 작업을 한 화면에서 관리하는 통합 UI입니다.</p>
       </div>
       <div className="hero-stats">
         <article>
