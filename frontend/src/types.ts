@@ -80,6 +80,12 @@ export interface MlflowRunItem {
   artifactUri: string
 }
 
+export interface MlflowExperimentItem {
+  experimentId: string
+  name: string
+  lifecycleStage: string
+}
+
 export interface MlflowServeServer {
   serverId: string
   modelUri: string

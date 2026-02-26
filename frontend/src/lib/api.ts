@@ -9,6 +9,7 @@ import type {
   CatalogStudioTask,
   CatalogValidationResult,
   LocalModel,
+  MlflowExperimentItem,
   MlflowRunItem,
   MlflowServeServer,
   RegistryArtifact,
@@ -77,6 +78,12 @@ export const api = {
     })
     return data.items
   },
+  getMlflowExperiments: async (trackingUri?: string): Promise<MlflowExperimentItem[]> => {
+    const { data } = await client.get<{ items: MlflowExperimentItem[] }>('/mlflow/experiments', {
+      params: trackingUri ? { trackingUri } : undefined,
+    })
+    return data.items
+  },
   selectBest: async (payload: {
     taskType: TaskType
     metric: string
@@ -134,6 +141,50 @@ export const api = {
     torchNumClasses?: number
   }): Promise<Record<string, unknown>> => {
     const { data } = await client.post('/ftp-registry/publish', payload)
+    return data
+  },
+  publishBestFtpModel: async (payload: {
+    taskType: TaskType
+    stage: RegistryStage
+    trackingUri?: string
+    experimentName?: string
+    metric?: string
+    mode?: 'max' | 'min'
+    modelName?: string
+    artifactPath?: string
+    version?: string
+    setLatest?: boolean
+    notes?: string
+    convertToTorchStandard?: boolean
+    torchTaskType?: BaseTaskType
+    torchNumClasses?: number
+  }): Promise<Record<string, unknown>> => {
+    const { data } = await client.post('/ftp-registry/publish-best', payload)
+    return data
+  },
+  uploadLocalFtpModel: async (payload: {
+    file: File
+    modelName: string
+    stage: RegistryStage
+    version?: string
+    setLatest?: boolean
+    notes?: string
+    convertToTorchStandard?: boolean
+    torchTaskType?: BaseTaskType
+    torchNumClasses?: number
+  }): Promise<Record<string, unknown>> => {
+    const form = new FormData()
+    form.append('file', payload.file)
+    form.append('modelName', payload.modelName)
+    form.append('stage', payload.stage)
+    form.append('setLatest', String(payload.setLatest ?? true))
+    form.append('convertToTorchStandard', String(payload.convertToTorchStandard ?? false))
+    if (payload.version) form.append('version', payload.version)
+    if (payload.notes) form.append('notes', payload.notes)
+    if (payload.torchTaskType) form.append('torchTaskType', payload.torchTaskType)
+    if (payload.torchNumClasses !== undefined) form.append('torchNumClasses', String(payload.torchNumClasses))
+
+    const { data } = await client.post('/ftp-registry/upload-local', form)
     return data
   },
   getRegistryCatalogModels: async (): Promise<RegistryCatalogModel[]> => {

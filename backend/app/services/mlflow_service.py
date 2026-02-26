@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 import mlflow
 from mlflow import MlflowClient
-from mlflow.entities import Run
+from mlflow.entities import Run, ViewType
 
 Mode = Literal["max", "min"]
 
@@ -72,6 +72,26 @@ def list_runs(
         )
 
     return result
+
+
+def list_experiments(
+    tracking_uri: str,
+    *,
+    max_results: int = 100,
+) -> list[dict[str, Any]]:
+    client = _get_client(tracking_uri)
+    experiments = client.search_experiments(
+        view_type=ViewType.ACTIVE_ONLY,
+        max_results=max_results,
+    )
+    return [
+        {
+            "experimentId": item.experiment_id,
+            "name": item.name,
+            "lifecycleStage": item.lifecycle_stage,
+        }
+        for item in experiments
+    ]
 
 
 def select_best_run(

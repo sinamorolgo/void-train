@@ -168,6 +168,23 @@ class PublishFtpModelRequest(BaseModel):
     torchNumClasses: int | None = None
 
 
+class PublishBestFtpModelRequest(BaseModel):
+    taskType: TaskType
+    stage: RegistryStage = "dev"
+    trackingUri: str | None = None
+    experimentName: str | None = None
+    metric: str | None = None
+    mode: Literal["max", "min"] | None = None
+    modelName: str | None = None
+    artifactPath: str | None = None
+    version: str | None = None
+    setLatest: bool = True
+    notes: str | None = None
+    convertToTorchStandard: bool = False
+    torchTaskType: BaseTaskType | None = None
+    torchNumClasses: int | None = None
+
+
 class PromoteFtpModelRequest(BaseModel):
     modelName: str
     fromStage: RegistryStage = "dev"

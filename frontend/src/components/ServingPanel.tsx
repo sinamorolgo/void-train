@@ -1,18 +1,21 @@
 import { useState } from 'react'
 
-import type { LocalModel, MlflowServeServer, RegistryArtifact, RegistryCatalogModel, TaskType } from '../types'
+import type { LocalModel, MlflowExperimentItem, MlflowServeServer, RegistryArtifact, RegistryCatalogModel, TaskType } from '../types'
 import { SectionCard } from './SectionCard'
 import { DownloadFtpCard } from './serving/DownloadFtpCard'
 import { DownloadMlflowCard } from './serving/DownloadMlflowCard'
 import { LocalLoaderCard } from './serving/LocalLoaderCard'
 import { LocalPredictCard } from './serving/LocalPredictCard'
 import { MlflowServeCard } from './serving/MlflowServeCard'
+import { RegisterBestMlflowCard } from './serving/RegisterBestMlflowCard'
 import { RegistryModelBrowserCard } from './serving/RegistryModelBrowserCard'
 import { RegisterPytorchCard } from './serving/RegisterPytorchCard'
+import { UploadPytorchCard } from './serving/UploadPytorchCard'
 
 interface ServingPanelProps {
   localModels: LocalModel[]
   mlflowServers: MlflowServeServer[]
+  mlflowExperiments: MlflowExperimentItem[]
   registryModels: RegistryCatalogModel[]
   busy: boolean
   onDownloadFromMlflow: (payload: {
@@ -40,8 +43,38 @@ interface ServingPanelProps {
   onPublishFtpModel: (payload: {
     modelName: string
     stage: 'dev' | 'release'
-    sourceType: 'local'
-    localPath: string
+    sourceType: 'local' | 'mlflow'
+    localPath?: string
+    version?: string
+    setLatest?: boolean
+    notes?: string
+    convertToTorchStandard?: boolean
+    torchTaskType?: 'classification' | 'segmentation'
+    torchNumClasses?: number
+    trackingUri?: string
+    runId?: string
+    artifactPath?: string
+  }) => void
+  onPublishBestFtpModel: (payload: {
+    taskType: 'classification' | 'segmentation'
+    stage: 'dev' | 'release'
+    trackingUri?: string
+    experimentName?: string
+    metric?: string
+    mode?: 'max' | 'min'
+    modelName?: string
+    artifactPath?: string
+    version?: string
+    setLatest?: boolean
+    notes?: string
+    convertToTorchStandard?: boolean
+    torchTaskType?: 'classification' | 'segmentation'
+    torchNumClasses?: number
+  }) => void
+  onUploadLocalFtpModel: (payload: {
+    file: File
+    modelName: string
+    stage: 'dev' | 'release'
     version?: string
     setLatest?: boolean
     notes?: string
@@ -62,6 +95,7 @@ interface ServingPanelProps {
 export function ServingPanel({
   localModels,
   mlflowServers,
+  mlflowExperiments,
   registryModels,
   busy,
   onDownloadFromMlflow,
@@ -70,6 +104,8 @@ export function ServingPanel({
   onStopMlflowServing,
   onLoadLocalModel,
   onPublishFtpModel,
+  onPublishBestFtpModel,
+  onUploadLocalFtpModel,
   onDownloadRegistryModel,
   onPredict,
 }: ServingPanelProps) {
@@ -101,6 +137,29 @@ export function ServingPanel({
   const [registerTaskType, setRegisterTaskType] = useState<'classification' | 'segmentation'>('classification')
   const [registerNumClasses, setRegisterNumClasses] = useState(2)
   const [convertToTorchStandard, setConvertToTorchStandard] = useState(true)
+
+  const [bestTrackingUri, setBestTrackingUri] = useState('http://127.0.0.1:5001')
+  const [bestExperimentName, setBestExperimentName] = useState('void-train-manager')
+  const [bestTaskType, setBestTaskType] = useState<'classification' | 'segmentation'>('classification')
+  const [bestMetric, setBestMetric] = useState('val_accuracy')
+  const [bestMode, setBestMode] = useState<'max' | 'min'>('max')
+  const [bestModelName, setBestModelName] = useState('classification-best-model')
+  const [bestArtifactPath, setBestArtifactPath] = useState('model')
+  const [bestStage, setBestStage] = useState<'dev' | 'release'>('dev')
+  const [bestVersion, setBestVersion] = useState('')
+  const [bestNotes, setBestNotes] = useState('')
+  const [bestConvertToTorchStandard, setBestConvertToTorchStandard] = useState(true)
+  const [bestTorchTaskType, setBestTorchTaskType] = useState<'classification' | 'segmentation'>('classification')
+  const [bestTorchNumClasses, setBestTorchNumClasses] = useState(2)
+
+  const [uploadModelName, setUploadModelName] = useState('classification-best-model')
+  const [uploadStage, setUploadStage] = useState<'dev' | 'release'>('dev')
+  const [uploadVersion, setUploadVersion] = useState('')
+  const [uploadNotes, setUploadNotes] = useState('')
+  const [uploadTaskType, setUploadTaskType] = useState<'classification' | 'segmentation'>('classification')
+  const [uploadNumClasses, setUploadNumClasses] = useState(2)
+  const [uploadConvertToTorchStandard, setUploadConvertToTorchStandard] = useState(true)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
 
   const [predictAlias, setPredictAlias] = useState('local-classifier')
   const [predictInput, setPredictInput] = useState('[[[[0.1,0.2],[0.3,0.4]]]]')
@@ -168,6 +227,65 @@ export function ServingPanel({
           onDownload={onDownloadRegistryModel}
         />
 
+        <RegisterBestMlflowCard
+          trackingUri={bestTrackingUri}
+          experimentName={bestExperimentName}
+          taskType={bestTaskType}
+          metric={bestMetric}
+          mode={bestMode}
+          modelName={bestModelName}
+          artifactPath={bestArtifactPath}
+          stage={bestStage}
+          version={bestVersion}
+          notes={bestNotes}
+          convertToTorchStandard={bestConvertToTorchStandard}
+          torchTaskType={bestTorchTaskType}
+          torchNumClasses={bestTorchNumClasses}
+          experiments={mlflowExperiments}
+          busy={busy}
+          onTrackingUriChange={setBestTrackingUri}
+          onExperimentNameChange={setBestExperimentName}
+          onTaskTypeChange={(value) => {
+            setBestTaskType(value)
+            if (value === 'classification') {
+              setBestMetric('val_accuracy')
+              setBestModelName('classification-best-model')
+            } else {
+              setBestMetric('val_iou')
+              setBestModelName('segmentation-best-model')
+            }
+            setBestTorchTaskType(value)
+          }}
+          onMetricChange={setBestMetric}
+          onModeChange={setBestMode}
+          onModelNameChange={setBestModelName}
+          onArtifactPathChange={setBestArtifactPath}
+          onStageChange={setBestStage}
+          onVersionChange={setBestVersion}
+          onNotesChange={setBestNotes}
+          onConvertChange={setBestConvertToTorchStandard}
+          onTorchTaskTypeChange={setBestTorchTaskType}
+          onTorchNumClassesChange={setBestTorchNumClasses}
+          onPublish={() =>
+            onPublishBestFtpModel({
+              taskType: bestTaskType,
+              stage: bestStage,
+              trackingUri: bestTrackingUri || undefined,
+              experimentName: bestExperimentName || undefined,
+              metric: bestMetric || undefined,
+              mode: bestMode,
+              modelName: bestModelName || undefined,
+              artifactPath: bestArtifactPath || undefined,
+              version: bestVersion || undefined,
+              setLatest: true,
+              notes: bestNotes || undefined,
+              convertToTorchStandard: bestConvertToTorchStandard,
+              torchTaskType: bestTorchTaskType,
+              torchNumClasses: bestTorchNumClasses,
+            })
+          }
+        />
+
         <RegisterPytorchCard
           modelName={registerModelName}
           stage={registerStage}
@@ -200,6 +318,41 @@ export function ServingPanel({
               torchNumClasses: registerNumClasses,
             })
           }
+        />
+
+        <UploadPytorchCard
+          modelName={uploadModelName}
+          stage={uploadStage}
+          version={uploadVersion}
+          notes={uploadNotes}
+          taskType={uploadTaskType}
+          numClasses={uploadNumClasses}
+          convertToTorchStandard={uploadConvertToTorchStandard}
+          fileName={uploadFile?.name ?? ''}
+          busy={busy}
+          onModelNameChange={setUploadModelName}
+          onStageChange={setUploadStage}
+          onVersionChange={setUploadVersion}
+          onNotesChange={setUploadNotes}
+          onTaskTypeChange={setUploadTaskType}
+          onNumClassesChange={setUploadNumClasses}
+          onConvertChange={setUploadConvertToTorchStandard}
+          onFileChange={setUploadFile}
+          onUpload={() => {
+            if (!uploadFile) return
+            onUploadLocalFtpModel({
+              file: uploadFile,
+              modelName: uploadModelName,
+              stage: uploadStage,
+              version: uploadVersion || undefined,
+              setLatest: true,
+              notes: uploadNotes || undefined,
+              convertToTorchStandard: uploadConvertToTorchStandard,
+              torchTaskType: uploadTaskType,
+              torchNumClasses: uploadNumClasses,
+            })
+            setUploadFile(null)
+          }}
         />
 
         <LocalLoaderCard

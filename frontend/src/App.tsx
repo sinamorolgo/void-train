@@ -132,6 +132,13 @@ export default function App() {
     refetchInterval: 3000,
   })
 
+  const mlflowExperimentsQuery = useQuery({
+    queryKey: ['mlflow-experiments'],
+    queryFn: () => api.getMlflowExperiments(String(selectedValues.mlflow_tracking_uri ?? 'http://127.0.0.1:5001')),
+    enabled: Boolean(selectedTask),
+    refetchInterval: 30000,
+  })
+
   const mlflowServingQuery = useQuery({
     queryKey: ['mlflow-serving'],
     queryFn: api.listMlflowServing,
@@ -282,6 +289,7 @@ export default function App() {
       queryClient.invalidateQueries({ queryKey: ['mlflow-serving'] })
       queryClient.invalidateQueries({ queryKey: ['local-models'] })
       queryClient.invalidateQueries({ queryKey: ['ftp-registry-catalog-models'] })
+      queryClient.invalidateQueries({ queryKey: ['mlflow-experiments'] })
     },
     onError: (error) => pushNotice('error', 'Serving action failed', errorMessage(error)),
   })
@@ -507,6 +515,7 @@ export default function App() {
             <ServingPanel
               localModels={localModelsQuery.data ?? []}
               mlflowServers={mlflowServingQuery.data ?? []}
+              mlflowExperiments={mlflowExperimentsQuery.data ?? []}
               registryModels={registryModelsQuery.data ?? []}
               busy={isBusy}
               onDownloadFromMlflow={(payload) => servingMutation.mutate(() => api.downloadModelFromMlflow(payload))}
@@ -516,6 +525,8 @@ export default function App() {
               onStopMlflowServing={(serverId) => servingMutation.mutate(() => api.stopMlflowServing(serverId))}
               onLoadLocalModel={(payload) => servingMutation.mutate(() => api.loadLocalModel(payload))}
               onPublishFtpModel={(payload) => servingMutation.mutate(() => api.publishFtpModel(payload))}
+              onPublishBestFtpModel={(payload) => servingMutation.mutate(() => api.publishBestFtpModel(payload))}
+              onUploadLocalFtpModel={(payload) => servingMutation.mutate(() => api.uploadLocalFtpModel(payload))}
               onPredict={(alias, inputs) => servingMutation.mutate(() => api.predictLocal(alias, inputs))}
             />
           </section>

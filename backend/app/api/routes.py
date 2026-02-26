@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import shutil
+import tempfile
 from typing import Any, Callable, cast
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.api.schemas import (
     CatalogStudioRegistryModelItem,
@@ -15,6 +17,7 @@ from app.api.schemas import (
     LoadLocalModelRequest,
     MigrateTensorBoardRequest,
     PromoteFtpModelRequest,
+    PublishBestFtpModelRequest,
     PublishFtpModelRequest,
     PredictRequest,
     SaveCatalogRequest,
@@ -43,6 +46,7 @@ from app.services.ftp_server_manager import ftp_server_manager
 from app.services.ftp_service import download_file_via_ftp
 from app.services.mlflow_service import (
     download_artifact,
+    list_experiments,
     list_runs,
     register_model,
     select_best_run,
@@ -312,6 +316,15 @@ def _ftp_download_host(value: str | None) -> str:
     return default_host or "127.0.0.1"
 
 
+def _parse_form_bool(value: str, *, field_name: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"Invalid boolean value for {field_name}: {value!r}")
+
+
 def _catalog_payload_response(*, content: str, exists: bool, source_path: Path) -> dict[str, Any]:
     parsed = parse_catalog_yaml(content, source=str(source_path))
     catalog = validate_catalog_payload(parsed, source=str(source_path))
@@ -520,6 +533,21 @@ def get_mlflow_runs(
     return _as_bad_request(_run)
 
 
+@router.get("/mlflow/experiments")
+def get_mlflow_experiments(
+    trackingUri: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    def _run() -> dict[str, Any]:
+        items = list_experiments(
+            tracking_uri=trackingUri or settings.default_mlflow_tracking_uri,
+            max_results=limit,
+        )
+        return {"items": items}
+
+    return _as_bad_request(_run)
+
+
 @router.post("/mlflow/select-best")
 def pick_best_run(payload: SelectBestRequest) -> dict[str, Any]:
     task = _task_definition(payload.taskType)
@@ -702,6 +730,104 @@ def publish_to_ftp_registry(payload: PublishFtpModelRequest) -> dict[str, Any]:
     if payload.sourceType == "mlflow":
         return _as_bad_request(lambda: _publish_ftp_from_mlflow(payload))
     return _as_bad_request(lambda: _publish_ftp_from_local(payload))
+
+
+@router.post("/ftp-registry/publish-best")
+def publish_best_to_ftp_registry(payload: PublishBestFtpModelRequest) -> dict[str, Any]:
+    task = _task_definition(payload.taskType)
+    metric_name = payload.metric or task.mlflow.metric or get_metric_for_task(task.base_task_type)
+    mode = payload.mode or task.mlflow.mode
+    tracking_uri = payload.trackingUri or settings.default_mlflow_tracking_uri
+    experiment_name = payload.experimentName or settings.default_mlflow_experiment
+    model_name = payload.modelName or task.mlflow.model_name or f"{payload.taskType}-best-model"
+    artifact_path = payload.artifactPath or task.mlflow.artifact_path
+
+    def _run() -> dict[str, Any]:
+        best = select_best_run(
+            tracking_uri=tracking_uri,
+            experiment_name=experiment_name,
+            metric_name=metric_name,
+            mode=mode,
+            task_type=task.base_task_type,
+        )
+
+        published = ftp_registry.publish_from_mlflow(
+            model_name=model_name,
+            stage=payload.stage,
+            version=payload.version,
+            set_latest=payload.setLatest,
+            notes=payload.notes,
+            tracking_uri=tracking_uri,
+            run_id=best.run_id,
+            artifact_path=artifact_path,
+            convert_to_torch_standard=payload.convertToTorchStandard,
+            torch_task_type=payload.torchTaskType,
+            torch_num_classes=payload.torchNumClasses,
+        )
+        return {
+            "taskType": payload.taskType,
+            "trackingUri": tracking_uri,
+            "experimentName": experiment_name,
+            "metric": best.metric_name,
+            "metricValue": best.metric_value,
+            "runId": best.run_id,
+            "artifactUri": best.artifact_uri,
+            "published": published,
+        }
+
+    return _as_bad_request(_run)
+
+
+@router.post("/ftp-registry/upload-local")
+def upload_local_to_ftp_registry(
+    file: UploadFile = File(...),
+    modelName: str = Form(...),
+    stage: str = Form("dev"),
+    version: str | None = Form(None),
+    setLatest: str = Form("true"),
+    notes: str | None = Form(None),
+    convertToTorchStandard: str = Form("false"),
+    torchTaskType: str | None = Form(None),
+    torchNumClasses: int | None = Form(None),
+) -> dict[str, Any]:
+    validated_stage = _validate_stage(stage)
+
+    def _run() -> dict[str, Any]:
+        if not modelName.strip():
+            raise ValueError("modelName is required")
+        if not file.filename:
+            raise ValueError("file is required")
+
+        with tempfile.TemporaryDirectory(prefix="ftp-upload-") as temp_dir:
+            temp_root = Path(temp_dir)
+            safe_name = Path(file.filename).name or "model.bin"
+            saved_path = temp_root / safe_name
+            with saved_path.open("wb") as stream:
+                file.file.seek(0)
+                shutil.copyfileobj(file.file, stream)
+
+            published = ftp_registry.publish_from_local(
+                model_name=modelName,
+                stage=validated_stage,
+                local_source_path=str(saved_path),
+                version=version,
+                set_latest=_parse_form_bool(setLatest, field_name="setLatest"),
+                notes=notes,
+                source_metadata={"type": "upload", "filename": safe_name},
+                convert_to_torch_standard=_parse_form_bool(
+                    convertToTorchStandard,
+                    field_name="convertToTorchStandard",
+                ),
+                torch_task_type=torchTaskType,
+                torch_num_classes=torchNumClasses,
+            )
+
+        return {
+            "uploadedFilename": file.filename,
+            "published": published,
+        }
+
+    return _as_bad_request(_run)
 
 
 @router.post("/ftp-registry/promote")

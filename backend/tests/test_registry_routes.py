@@ -7,10 +7,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
+import io
 
 import app.api.routes as routes
-from app.api.schemas import DownloadRegisteredFtpModelRequest
+from app.api.schemas import DownloadRegisteredFtpModelRequest, PublishBestFtpModelRequest
 from app.core.task_catalog import TaskCatalogService
+from fastapi import UploadFile
 
 
 class _FakeCatalogGetter:
@@ -47,6 +49,28 @@ class _FakeFtpRegistry:
 
 
 class RegistryRoutesTest(unittest.TestCase):
+    def test_get_mlflow_experiments(self) -> None:
+        with (
+            patch.object(
+                routes,
+                "settings",
+                SimpleNamespace(default_mlflow_tracking_uri="http://127.0.0.1:5001"),
+            ),
+            patch.object(
+                routes,
+                "list_experiments",
+                return_value=[
+                    {"experimentId": "1", "name": "void-train-manager", "lifecycleStage": "active"},
+                    {"experimentId": "2", "name": "seg-exp", "lifecycleStage": "active"},
+                ],
+            ) as mocked_list,
+        ):
+            payload = routes.get_mlflow_experiments()
+
+        self.assertEqual(len(payload["items"]), 2)
+        self.assertEqual(payload["items"][0]["name"], "void-train-manager")
+        mocked_list.assert_called_once()
+
     def test_catalog_models_uses_registry_models_from_yaml(self) -> None:
         with tempfile.TemporaryDirectory(prefix="registry-routes-") as temp_dir:
             catalog_path = Path(temp_dir) / "training_catalog.yaml"
@@ -129,6 +153,118 @@ class RegistryRoutesTest(unittest.TestCase):
         self.assertEqual(called_kwargs["port"], 2121)
         self.assertEqual(called_kwargs["username"], "mlops")
         self.assertEqual(called_kwargs["password"], "mlops123!")
+
+    def test_publish_best_to_ftp_registry(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="registry-best-") as temp_dir:
+            catalog_path = Path(temp_dir) / "training_catalog.yaml"
+            catalog_path.write_text(
+                textwrap.dedent(
+                    """
+                    tasks:
+                      - taskType: classification
+                        title: Classification
+                        baseTaskType: classification
+                        runner:
+                          target: backend/trainers/train_classification.py
+                        mlflow:
+                          metric: val_accuracy
+                          mode: max
+                          modelName: classification-best-model
+                          artifactPath: model
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_getter = _FakeCatalogGetter(catalog_path)
+
+            with (
+                patch.object(routes, "get_task_catalog", fake_getter),
+                patch.object(
+                    routes,
+                    "settings",
+                    SimpleNamespace(
+                        default_mlflow_tracking_uri="http://127.0.0.1:5001",
+                        default_mlflow_experiment="void-train-manager",
+                    ),
+                ),
+                patch.object(
+                    routes,
+                    "select_best_run",
+                    return_value=SimpleNamespace(
+                        run_id="abc123run",
+                        metric_name="val_accuracy",
+                        metric_value=0.9321,
+                        artifact_uri="mlflow-artifacts:/abc123run/artifacts",
+                    ),
+                ) as mocked_best,
+                patch.object(
+                    routes,
+                    "ftp_registry",
+                    SimpleNamespace(
+                        publish_from_mlflow=lambda **kwargs: {
+                            "modelName": kwargs["model_name"],
+                            "stage": kwargs["stage"],
+                            "version": kwargs.get("version") or "v0001",
+                        }
+                    ),
+                ),
+            ):
+                result = routes.publish_best_to_ftp_registry(
+                    PublishBestFtpModelRequest(
+                        taskType="classification",
+                        stage="dev",
+                        experimentName="void-train-manager",
+                        setLatest=True,
+                    )
+                )
+
+        self.assertEqual(result["taskType"], "classification")
+        self.assertEqual(result["runId"], "abc123run")
+        self.assertEqual(result["published"]["modelName"], "classification-best-model")
+        self.assertEqual(result["published"]["stage"], "dev")
+        mocked_best.assert_called_once()
+
+    def test_upload_local_to_ftp_registry(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def _fake_publish_from_local(**kwargs: Any) -> dict[str, Any]:
+            source_path = Path(str(kwargs["local_source_path"]))
+            captured["exists"] = source_path.exists()
+            captured["filename"] = source_path.name
+            captured["bytes"] = source_path.read_bytes()
+            captured["kwargs"] = kwargs
+            return {
+                "modelName": kwargs["model_name"],
+                "stage": kwargs["stage"],
+                "version": kwargs.get("version") or "v0007",
+            }
+
+        with patch.object(
+            routes,
+            "ftp_registry",
+            SimpleNamespace(publish_from_local=_fake_publish_from_local),
+        ):
+            upload = UploadFile(filename="manual-model.pt", file=io.BytesIO(b"pt-binary"))
+            result = routes.upload_local_to_ftp_registry(
+                file=upload,
+                modelName="segmentation-best-model",
+                stage="release",
+                version="v0100",
+                setLatest="true",
+                notes="manual upload",
+                convertToTorchStandard="true",
+                torchTaskType="segmentation",
+                torchNumClasses=2,
+            )
+
+        self.assertEqual(result["uploadedFilename"], "manual-model.pt")
+        self.assertEqual(result["published"]["stage"], "release")
+        self.assertTrue(captured["exists"])
+        self.assertEqual(captured["filename"], "manual-model.pt")
+        self.assertEqual(captured["bytes"], b"pt-binary")
+        self.assertEqual(captured["kwargs"]["source_metadata"]["type"], "upload")
+        self.assertEqual(captured["kwargs"]["source_metadata"]["filename"], "manual-model.pt")
 
 
 if __name__ == "__main__":
