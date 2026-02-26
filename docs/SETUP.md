@@ -213,9 +213,41 @@ print("VTM_RUN_META::" + json.dumps({"mlflow_run_id": run.info.run_id}), flush=T
 
 - UI에서 FTP 정보 입력 → 모델 파일 다운로드
 - UI의 `Register .pth/.pt to FTP` 카드에서 로컬 `.pth/.pt`를 바로 publish 가능
+- UI의 `Upload .pth/.pt and Register` 카드에서 브라우저 파일 업로드 후 바로 publish 가능
+- UI의 `Publish Best Run to FTP` 카드에서 MLflow 베스트 run 자동 선택 후 publish 가능
 - UI의 `Model Registry Browser` 카드에서 모델별(dev/release stage, version) 목록 확인 + 선택 다운로드
 - `Convert to Torch Standard` 체크 시 `model-standard.pt` 생성/등록
 - `Local Loader`로 checkpoint 로드 후 `Local Predict` 사용
+
+### MLflow 베스트 자동 publish API
+
+```bash
+curl -X POST http://127.0.0.1:8008/api/ftp-registry/publish-best \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "taskType":"classification",
+    "stage":"dev",
+    "experimentName":"void-train-manager",
+    "metric":"val_accuracy",
+    "mode":"max",
+    "modelName":"classification-best-model",
+    "artifactPath":"model",
+    "setLatest":true
+  }'
+```
+
+### 파일 업로드 publish API
+
+```bash
+curl -X POST http://127.0.0.1:8008/api/ftp-registry/upload-local \
+  -F file=@./outputs/checkpoints/best_checkpoint.pth \
+  -F modelName=classification-best-model \
+  -F stage=dev \
+  -F setLatest=true \
+  -F convertToTorchStandard=true \
+  -F torchTaskType=classification \
+  -F torchNumClasses=5
+```
 
 ## 9) FTP 모델 레지스트리 (dev/release)
 

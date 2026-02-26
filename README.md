@@ -19,6 +19,8 @@ PyTorch 학습(분류/세그)을 웹 UI로 실행하고 MLflow 중심으로 추�
 - UI `YAML Catalog` 탭에서 설정 파일을 조회/검증/저장 가능
 - UI `YAML Studio` 탭에서 task/registry를 폼으로 편집하고 `extraFields`(JSON array)까지 관리 가능
 - `Model Serving`에서 `.pth/.pt` 업로드 + 표준 아티팩트 변환 등록 지원
+- `Model Serving`에서 웹 파일 업로드(`Upload + Register`)로 즉시 FTP 등록 지원
+- `Model Serving`에서 MLflow 베스트 run 자동 선택 후 FTP 등록(`Pick Best + Publish`) 지원
 - `Model Serving > Model Registry Browser`에서 모델별(`classification`/`segmentation`) stage/version 리스트 조회 및 다운로드 지원
 - 클라이언트는 `Dataclass` 기반 설정 + 싱글톤 패턴으로 FTP 모델 다운로드 경로를 관리
 - 학습/레지스트리 Stage를 `dev`/`release`로 분리 운영 가능
@@ -99,6 +101,11 @@ tasks:
 - `extraFields`는 런처 UI 폼에 자동 노출되고, `runs/start` 시 CLI 인자로 직렬화되어 전달됩니다.
 - 외부 스크립트가 내부 dataclass 기본 인자까지 받지 않는 경우 `hiddenFields`/`fieldOrder`와 함께 스크립트 인자 규약을 맞춰 사용하세요.
 - 코드 수정 없이 `YAML Studio -> Advanced Fields`에서 `fieldOverrides`/`extraFields`를 편집해 반영할 수 있습니다.
+
+## FTP 등록 방식 (신규)
+
+- 자동: `Publish Best Run to FTP` 카드에서 MLflow 실험/metric 기준 베스트 run을 찾고 바로 FTP registry에 등록
+- 수동: `Upload .pth/.pt and Register` 카드에서 파일 업로드 후 stage/version 지정 등록
 
 ## 문서
 

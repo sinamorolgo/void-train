@@ -88,7 +88,28 @@ YAML 전체를 직접 수정하지 않아도 task/registry를 폼으로 편집�
 4. `Artifact` 선택 (`bundle.tar.gz`, `manifest.json`, `model-standard.pt`)
 5. `Destination` 지정 후 `Download Selected Artifact`
 
-## 5) 모델 추가/수정 (YAML 단일 관리)
+## 5) FTP 등록 - 자동/수동
+
+### A. Publish Best Run to FTP
+
+MLflow 실험 이름과 metric/mode를 기준으로 베스트 run을 자동 선택해 FTP registry에 등록합니다.
+
+1. `Tracking URI`, `Experiment Name` 확인
+2. `Task Type`, `Metric`, `Mode` 선택
+3. `Model Name`, `Stage`, `Artifact Path` 입력
+4. 필요 시 `Convert to Torch Standard` 체크
+5. `Pick Best + Publish`
+
+### B. Upload .pth/.pt and Register
+
+로컬 파일 경로를 서버에 맞춰 입력하지 않고, 브라우저에서 파일을 직접 업로드해 등록합니다.
+
+1. `Model Name`, `Stage` 선택
+2. `.pth/.pt` 파일 업로드
+3. 필요 시 `Version`, `Torch Task Type`, `Num Classes`, `Notes` 입력
+4. `Upload + Register`
+
+## 6) 모델 추가/수정 (YAML 단일 관리)
 
 `backend/config/training_catalog.yaml`의 `registryModels`를 수정하면 웹 목록에 바로 반영됩니다.
 

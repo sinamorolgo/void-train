@@ -115,6 +115,20 @@
 - `backend/tests/test_task_catalog.py`
 - `backend/tests/test_catalog_studio_routes.py`
 
-## 6) 결론
+## 6) FTP 등록 신규 기능 검증 (2026-02-26)
+
+검증 항목:
+
+- [x] `/api/mlflow/experiments` 실험 목록 조회
+- [x] `/api/ftp-registry/publish-best` 베스트 run 자동 선택 후 FTP 등록
+- [x] `/api/ftp-registry/upload-local` 파일 업로드 기반 FTP 등록
+
+근거 테스트:
+
+- `backend/tests/test_registry_routes.py::test_get_mlflow_experiments`
+- `backend/tests/test_registry_routes.py::test_publish_best_to_ftp_registry`
+- `backend/tests/test_registry_routes.py::test_upload_local_to_ftp_registry`
+
+## 7) 결론
 
 요청하신 핵심 시나리오(학습 실행/모니터링, MLflow 전환, best 모델 선택, 다운로드, 로컬 및 MLflow 서빙)는 실제 실행으로 검증 완료했습니다.

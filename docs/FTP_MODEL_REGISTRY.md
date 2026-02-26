@@ -35,6 +35,12 @@ FTP 루트(`FTP_REGISTRY_ROOT`) 아래:
 
 ## API
 
+### 0) MLflow experiment 목록 조회
+
+```bash
+curl 'http://127.0.0.1:8008/api/mlflow/experiments?trackingUri=http://127.0.0.1:5001'
+```
+
 ### 1) MLflow에서 dev publish
 
 ```bash
@@ -68,8 +74,38 @@ curl -X POST http://127.0.0.1:8008/api/ftp-registry/publish \
   }'
 ```
 
+### 2-1) Upload 기반 local publish (웹 패널과 동일)
+
+```bash
+curl -X POST http://127.0.0.1:8008/api/ftp-registry/upload-local \
+  -F file=@./outputs/checkpoints/best_checkpoint.pth \
+  -F modelName=classification-best-model \
+  -F stage=dev \
+  -F setLatest=true \
+  -F convertToTorchStandard=true \
+  -F torchTaskType=classification \
+  -F torchNumClasses=5
+```
+
 변환이 켜지면 payload에 `model-standard.pt`가 생성되고,
 manifest/index에 `standardArtifacts.pytorch` 경로가 기록됩니다.
+
+### 2-2) 베스트 run 자동 선택 + publish
+
+```bash
+curl -X POST http://127.0.0.1:8008/api/ftp-registry/publish-best \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "taskType":"classification",
+    "stage":"dev",
+    "experimentName":"void-train-manager",
+    "metric":"val_accuracy",
+    "mode":"max",
+    "modelName":"classification-best-model",
+    "artifactPath":"model",
+    "setLatest":true
+  }'
+```
 
 ### 3) dev -> release promote
 
