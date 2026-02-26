@@ -1,33 +1,41 @@
-import type { MlflowServeServer } from '../../types'
+import type { RayServeServer } from '../../types'
 
-interface MlflowServeCardProps {
+interface RayServeCardProps {
   modelUri: string
   host: string
   port: number
+  appName: string
+  routePrefix: string
   busy: boolean
-  servers: MlflowServeServer[]
+  servers: RayServeServer[]
   onModelUriChange: (value: string) => void
   onHostChange: (value: string) => void
   onPortChange: (value: number) => void
+  onAppNameChange: (value: string) => void
+  onRoutePrefixChange: (value: string) => void
   onStart: () => void
   onStop: (serverId: string) => void
 }
 
-export function MlflowServeCard({
+export function RayServeCard({
   modelUri,
   host,
   port,
+  appName,
+  routePrefix,
   busy,
   servers,
   onModelUriChange,
   onHostChange,
   onPortChange,
+  onAppNameChange,
+  onRoutePrefixChange,
   onStart,
   onStop,
-}: MlflowServeCardProps) {
+}: RayServeCardProps) {
   return (
     <div className="mini-card">
-      <h3>MLflow Native Serve</h3>
+      <h3>Ray Serve</h3>
       <div className="compact-fields">
         <label>
           Model URI
@@ -55,16 +63,34 @@ export function MlflowServeCard({
             onChange={(event) => onPortChange(Number.parseInt(event.target.value, 10) || 7001)}
           />
         </label>
+        <label>
+          App Name
+          <input
+            name="serve_app_name"
+            autoComplete="off"
+            value={appName}
+            onChange={(event) => onAppNameChange(event.target.value)}
+          />
+        </label>
+        <label>
+          Route Prefix
+          <input
+            name="serve_route_prefix"
+            autoComplete="off"
+            value={routePrefix}
+            onChange={(event) => onRoutePrefixChange(event.target.value)}
+          />
+        </label>
       </div>
       <button type="button" disabled={busy || !modelUri} onClick={onStart}>
-        Start MLflow Serving
+        Start Ray Serving
       </button>
 
       <ul className="inline-list">
         {servers.map((server) => (
           <li key={server.serverId}>
             <span>
-              {server.modelUri} ({server.status})
+              {server.modelUri} {server.routePrefix} ({server.status})
             </span>
             {server.status === 'running' ? (
               <button type="button" onClick={() => onStop(server.serverId)}>

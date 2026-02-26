@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -9,7 +10,6 @@ from typing import Any
 import torch
 
 from app.core.settings import get_settings
-from app.services.mlflow_service import build_mlflow_serve_command
 from app.services.process_utils import build_pythonpath_env, read_process_output, start_checked_process, stop_process
 from trainers.models import create_model
 
@@ -19,11 +19,13 @@ def _utc_now() -> str:
 
 
 @dataclass
-class MlflowServeRecord:
+class RayServeRecord:
     server_id: str
     model_uri: str
     host: str
     port: int
+    app_name: str
+    route_prefix: str
     started_at: str
     status: str = "running"
     pid: int | None = None
@@ -37,6 +39,8 @@ class MlflowServeRecord:
             "modelUri": self.model_uri,
             "host": self.host,
             "port": self.port,
+            "appName": self.app_name,
+            "routePrefix": self.route_prefix,
             "startedAt": self.started_at,
             "finishedAt": self.finished_at,
             "status": self.status,
@@ -67,36 +71,74 @@ class LocalModelRecord:
 class ModelServingManager:
     def __init__(self) -> None:
         self._settings = get_settings()
-        self._mlflow_servers: dict[str, MlflowServeRecord] = {}
+        self._ray_servers: dict[str, RayServeRecord] = {}
         self._local_models: dict[str, LocalModelRecord] = {}
 
-    def start_mlflow_server(self, *, model_uri: str, host: str, port: int) -> dict[str, Any]:
-        command = build_mlflow_serve_command(model_uri=model_uri, host=host, port=port)
+    def _resolve_route_prefix(self, route_prefix: str) -> str:
+        value = route_prefix.strip()
+        if not value:
+            return "/"
+        if value == "/":
+            return value
+        return value if value.startswith("/") else f"/{value}"
+
+    def start_ray_server(
+        self,
+        *,
+        model_uri: str,
+        host: str,
+        port: int,
+        app_name: str = "void-train-manager",
+        route_prefix: str = "/",
+    ) -> dict[str, Any]:
+        script_path = self._settings.backend_root / "scripts" / "run_ray_serve.py"
+        if not script_path.exists():
+            raise FileNotFoundError(f"Ray Serve launcher script not found: {script_path}")
+
+        resolved_route_prefix = self._resolve_route_prefix(route_prefix)
+        resolved_app_name = app_name.strip() or "void-train-manager"
+        command = [
+            sys.executable,
+            str(script_path),
+            "--model-uri",
+            model_uri,
+            "--host",
+            host,
+            "--port",
+            str(port),
+            "--app-name",
+            resolved_app_name,
+            "--route-prefix",
+            resolved_route_prefix,
+        ]
         env = build_pythonpath_env(prepend_path=str(self._settings.backend_root))
         process = start_checked_process(
             command,
             env=env,
-            startup_timeout_sec=1.2,
-            error_prefix="MLflow serving failed to start",
+            cwd=str(self._settings.project_root),
+            startup_timeout_sec=1.5,
+            error_prefix="Ray Serve failed to start",
         )
 
         server_id = uuid.uuid4().hex
-        record = MlflowServeRecord(
+        record = RayServeRecord(
             server_id=server_id,
             model_uri=model_uri,
             host=host,
             port=port,
+            app_name=resolved_app_name,
+            route_prefix=resolved_route_prefix,
             started_at=_utc_now(),
             pid=process.pid,
             process=process,
         )
-        self._mlflow_servers[server_id] = record
+        self._ray_servers[server_id] = record
         return record.to_public()
 
-    def stop_mlflow_server(self, server_id: str) -> dict[str, Any]:
-        record = self._mlflow_servers.get(server_id)
+    def stop_ray_server(self, server_id: str) -> dict[str, Any]:
+        record = self._ray_servers.get(server_id)
         if record is None:
-            raise KeyError(f"MLflow server not found: {server_id}")
+            raise KeyError(f"Ray Serve server not found: {server_id}")
 
         if record.process is not None and record.status == "running":
             stop_process(record.process, terminate_timeout_sec=8, kill_timeout_sec=3)
@@ -105,8 +147,8 @@ class ModelServingManager:
         record.finished_at = _utc_now()
         return record.to_public()
 
-    def list_mlflow_servers(self) -> list[dict[str, Any]]:
-        for record in self._mlflow_servers.values():
+    def list_ray_servers(self) -> list[dict[str, Any]]:
+        for record in self._ray_servers.values():
             if record.process is not None and record.status == "running":
                 if record.process.poll() is not None:
                     record.status = "exited"
@@ -114,7 +156,7 @@ class ModelServingManager:
                     combined = read_process_output(record.process, max_chars=5000)
                     if combined:
                         record.last_error = combined
-        return [item.to_public() for item in self._mlflow_servers.values()]
+        return [item.to_public() for item in self._ray_servers.values()]
 
     def load_local_model(
         self,

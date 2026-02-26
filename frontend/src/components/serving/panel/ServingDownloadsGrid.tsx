@@ -1,41 +1,41 @@
-import type { MlflowServeServer } from '../../../types'
+import type { RayServeServer } from '../../../types'
 import { DownloadFtpCard } from '../DownloadFtpCard'
 import { DownloadMlflowCard } from '../DownloadMlflowCard'
-import { MlflowServeCard } from '../MlflowServeCard'
-import type { FtpDownloadFormState, MlflowDownloadFormState, MlflowServeFormState } from './types'
+import { RayServeCard } from '../RayServeCard'
+import type { FtpDownloadFormState, MlflowDownloadFormState, RayServeFormState } from './types'
 
 interface ServingDownloadsGridProps {
   busy: boolean
-  mlflowServers: MlflowServeServer[]
+  rayServers: RayServeServer[]
   destinationDir: string
   mlflowDownloadForm: MlflowDownloadFormState
   ftpDownloadForm: FtpDownloadFormState
-  mlflowServeForm: MlflowServeFormState
+  rayServeForm: RayServeFormState
   onDestinationDirChange: (value: string) => void
   onPatchMlflowDownloadForm: (patch: Partial<MlflowDownloadFormState>) => void
   onPatchFtpDownloadForm: (patch: Partial<FtpDownloadFormState>) => void
-  onPatchMlflowServeForm: (patch: Partial<MlflowServeFormState>) => void
+  onPatchRayServeForm: (patch: Partial<RayServeFormState>) => void
   onDownloadFromMlflow: () => void
   onDownloadFromFtp: () => void
-  onStartMlflowServing: () => void
-  onStopMlflowServing: (serverId: string) => void
+  onStartRayServing: () => void
+  onStopRayServing: (serverId: string) => void
 }
 
 export function ServingDownloadsGrid({
   busy,
-  mlflowServers,
+  rayServers,
   destinationDir,
   mlflowDownloadForm,
   ftpDownloadForm,
-  mlflowServeForm,
+  rayServeForm,
   onDestinationDirChange,
   onPatchMlflowDownloadForm,
   onPatchFtpDownloadForm,
-  onPatchMlflowServeForm,
+  onPatchRayServeForm,
   onDownloadFromMlflow,
   onDownloadFromFtp,
-  onStartMlflowServing,
-  onStopMlflowServing,
+  onStartRayServing,
+  onStopRayServing,
 }: ServingDownloadsGridProps) {
   return (
     <div className="mlflow-grid">
@@ -69,17 +69,21 @@ export function ServingDownloadsGrid({
         onDownload={onDownloadFromFtp}
       />
 
-      <MlflowServeCard
-        modelUri={mlflowServeForm.modelUri}
-        host={mlflowServeForm.host}
-        port={mlflowServeForm.port}
+      <RayServeCard
+        modelUri={rayServeForm.modelUri}
+        host={rayServeForm.host}
+        port={rayServeForm.port}
+        appName={rayServeForm.appName}
+        routePrefix={rayServeForm.routePrefix}
         busy={busy}
-        servers={mlflowServers}
-        onModelUriChange={(value) => onPatchMlflowServeForm({ modelUri: value })}
-        onHostChange={(value) => onPatchMlflowServeForm({ host: value })}
-        onPortChange={(value) => onPatchMlflowServeForm({ port: value })}
-        onStart={onStartMlflowServing}
-        onStop={onStopMlflowServing}
+        servers={rayServers}
+        onModelUriChange={(value) => onPatchRayServeForm({ modelUri: value })}
+        onHostChange={(value) => onPatchRayServeForm({ host: value })}
+        onPortChange={(value) => onPatchRayServeForm({ port: value })}
+        onAppNameChange={(value) => onPatchRayServeForm({ appName: value })}
+        onRoutePrefixChange={(value) => onPatchRayServeForm({ routePrefix: value })}
+        onStart={onStartRayServing}
+        onStop={onStopRayServing}
       />
     </div>
   )

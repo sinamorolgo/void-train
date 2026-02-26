@@ -2,7 +2,7 @@ import type {
   BaseTaskType,
   LocalModel,
   MlflowExperimentItem,
-  MlflowServeServer,
+  RayServeServer,
   RegistryArtifact,
   RegistryCatalogModel,
   RegistryStage,
@@ -11,7 +11,7 @@ import type {
 
 export interface ServingPanelProps {
   localModels: LocalModel[]
-  mlflowServers: MlflowServeServer[]
+  rayServers: RayServeServer[]
   mlflowExperiments: MlflowExperimentItem[]
   registryModels: RegistryCatalogModel[]
   busy: boolean
@@ -29,8 +29,14 @@ export interface ServingPanelProps {
     remotePath: string
     destinationDir: string
   }) => void
-  onStartMlflowServing: (payload: { modelUri: string; host: string; port: number }) => void
-  onStopMlflowServing: (serverId: string) => void
+  onStartRayServing: (payload: {
+    modelUri: string
+    host: string
+    port: number
+    appName?: string
+    routePrefix?: string
+  }) => void
+  onStopRayServing: (serverId: string) => void
   onLoadLocalModel: (payload: {
     alias: string
     modelPath: string
@@ -103,10 +109,12 @@ export interface FtpDownloadFormState {
   remotePath: string
 }
 
-export interface MlflowServeFormState {
+export interface RayServeFormState {
   modelUri: string
   host: string
   port: number
+  appName: string
+  routePrefix: string
 }
 
 export interface LocalLoaderFormState {
@@ -161,7 +169,7 @@ export interface LocalPredictFormState {
 
 export type DownloadFromMlflowPayload = Parameters<ServingPanelProps['onDownloadFromMlflow']>[0]
 export type DownloadFromFtpPayload = Parameters<ServingPanelProps['onDownloadFromFtp']>[0]
-export type StartMlflowServingPayload = Parameters<ServingPanelProps['onStartMlflowServing']>[0]
+export type StartRayServingPayload = Parameters<ServingPanelProps['onStartRayServing']>[0]
 export type LoadLocalModelPayload = Parameters<ServingPanelProps['onLoadLocalModel']>[0]
 export type PublishFtpModelPayload = Parameters<ServingPanelProps['onPublishFtpModel']>[0]
 export type PublishBestFtpModelPayload = Parameters<ServingPanelProps['onPublishBestFtpModel']>[0]

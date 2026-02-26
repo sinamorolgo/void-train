@@ -7,7 +7,7 @@ import {
   buildFtpDownloadPayload,
   buildLoadLocalPayload,
   buildMlflowDownloadPayload,
-  buildMlflowServePayload,
+  buildRayServePayload,
   buildPublishBestPayload,
   buildRegisterLocalPayload,
   buildUploadLocalPayload,
@@ -18,14 +18,14 @@ import { useServingPanelState } from './serving/panel/useServingPanelState'
 
 export function ServingPanel({
   localModels,
-  mlflowServers,
+  rayServers,
   mlflowExperiments,
   registryModels,
   busy,
   onDownloadFromMlflow,
   onDownloadFromFtp,
-  onStartMlflowServing,
-  onStopMlflowServing,
+  onStartRayServing,
+  onStopRayServing,
   onLoadLocalModel,
   onPublishFtpModel,
   onPublishBestFtpModel,
@@ -39,7 +39,7 @@ export function ServingPanel({
     setDestinationDir,
     mlflowDownloadForm,
     ftpDownloadForm,
-    mlflowServeForm,
+    rayServeForm,
     localLoaderForm,
     registerLocalForm,
     publishBestForm,
@@ -47,7 +47,7 @@ export function ServingPanel({
     localPredictForm,
     patchMlflowDownloadForm,
     patchFtpDownloadForm,
-    patchMlflowServeForm,
+    patchRayServeForm,
     patchLocalLoaderForm,
     patchRegisterLocalForm,
     patchPublishBestForm,
@@ -65,8 +65,8 @@ export function ServingPanel({
     onDownloadFromFtp(buildFtpDownloadPayload(ftpDownloadForm, destinationDir))
   }
 
-  const handleMlflowServeStart = () => {
-    onStartMlflowServing(buildMlflowServePayload(mlflowServeForm))
+  const handleRayServeStart = () => {
+    onStartRayServing(buildRayServePayload(rayServeForm))
   }
 
   const handleBestPublish = () => {
@@ -106,22 +106,22 @@ export function ServingPanel({
   }
 
   return (
-    <SectionCard title="Model Serving" subtitle="MLflow serve 우선, 필요 시 FTP fallback + 로컬 로더로 운영할 수 있습니다.">
+    <SectionCard title="Model Serving" subtitle="Ray Serve 기반 API 서빙과 FTP fallback + 로컬 로더 운영을 함께 지원합니다.">
       <ServingDownloadsGrid
         busy={busy}
-        mlflowServers={mlflowServers}
+        rayServers={rayServers}
         destinationDir={destinationDir}
         mlflowDownloadForm={mlflowDownloadForm}
         ftpDownloadForm={ftpDownloadForm}
-        mlflowServeForm={mlflowServeForm}
+        rayServeForm={rayServeForm}
         onDestinationDirChange={setDestinationDir}
         onPatchMlflowDownloadForm={patchMlflowDownloadForm}
         onPatchFtpDownloadForm={patchFtpDownloadForm}
-        onPatchMlflowServeForm={patchMlflowServeForm}
+        onPatchRayServeForm={patchRayServeForm}
         onDownloadFromMlflow={handleMlflowDownload}
         onDownloadFromFtp={handleFtpDownload}
-        onStartMlflowServing={handleMlflowServeStart}
-        onStopMlflowServing={onStopMlflowServing}
+        onStartRayServing={handleRayServeStart}
+        onStopRayServing={onStopRayServing}
       />
 
       <ServingOperationsGrid

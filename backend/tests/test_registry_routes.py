@@ -10,7 +10,12 @@ from unittest.mock import patch
 import io
 
 import app.api.routes as routes
-from app.api.schemas import DownloadRegisteredFtpModelRequest, PublishBestFtpModelRequest
+from app.api.schemas import (
+    DownloadRegisteredFtpModelRequest,
+    PublishBestFtpModelRequest,
+    StartRayServingRequest,
+    StopRayServingRequest,
+)
 from app.core.task_catalog import TaskCatalogService
 from fastapi import UploadFile
 
@@ -49,6 +54,57 @@ class _FakeFtpRegistry:
 
 
 class RegistryRoutesTest(unittest.TestCase):
+    def test_start_ray_serving(self) -> None:
+        with patch.object(
+            routes,
+            "serving_manager",
+            SimpleNamespace(
+                start_ray_server=lambda **kwargs: {
+                    "serverId": "ray-1",
+                    "status": "running",
+                    "modelUri": kwargs["model_uri"],
+                    "appName": kwargs["app_name"],
+                    "routePrefix": kwargs["route_prefix"],
+                }
+            ),
+        ):
+            payload = routes.start_ray_serving(
+                StartRayServingRequest(
+                    modelUri="models:/classification-best-model/1",
+                    host="0.0.0.0",
+                    port=7001,
+                    appName="vtm-ray",
+                    routePrefix="/",
+                )
+            )
+
+        self.assertEqual(payload["serverId"], "ray-1")
+        self.assertEqual(payload["status"], "running")
+        self.assertEqual(payload["modelUri"], "models:/classification-best-model/1")
+        self.assertEqual(payload["appName"], "vtm-ray")
+
+    def test_stop_ray_serving(self) -> None:
+        with patch.object(
+            routes,
+            "serving_manager",
+            SimpleNamespace(stop_ray_server=lambda server_id: {"serverId": server_id, "status": "stopped"}),
+        ):
+            payload = routes.stop_ray_serving(StopRayServingRequest(serverId="ray-1"))
+
+        self.assertEqual(payload["serverId"], "ray-1")
+        self.assertEqual(payload["status"], "stopped")
+
+    def test_list_ray_serving(self) -> None:
+        with patch.object(
+            routes,
+            "serving_manager",
+            SimpleNamespace(list_ray_servers=lambda: [{"serverId": "ray-1", "status": "running"}]),
+        ):
+            payload = routes.list_ray_serving()
+
+        self.assertEqual(payload["items"][0]["serverId"], "ray-1")
+        self.assertEqual(payload["items"][0]["status"], "running")
+
     def test_get_mlflow_experiments(self) -> None:
         with (
             patch.object(
