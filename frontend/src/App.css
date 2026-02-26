@@ -1532,7 +1532,11 @@ textarea:focus-visible,
   font-size: 0.82rem;
   font-weight: 600;
   padding: 0.44rem 0.86rem;
-  transition: all 180ms ease;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
 }
 
 .view-tab:hover {
