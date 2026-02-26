@@ -1,6 +1,6 @@
 # YAML Studio UX Analysis (Before/After)
 
-`YAML Studio` 전용 탭 추가 후 실제 화면 기준으로 UX를 점검하고, 1차 개선을 반영한 기록입니다.
+`YAML Studio` 전용 탭 추가 후 실제 화면 기준으로 UX를 점검하고, 1차/2차 개선을 반영한 기록입니다.
 
 ## Capture 기준
 
@@ -24,6 +24,23 @@
 2. `Filter tasks` 입력으로 taskType/title/baseTaskType 빠른 필터 추가
 3. Registry 표 컬럼 최소 너비 조정(`modelName`, `destination`)으로 가독성 개선
 
+## 2차 개선 (E2E 기반)
+
+1. `Collapse All` 정합성 수정
+
+- 문제: 첫 번째 task가 기본 fallback으로 남아 완전히 접히지 않는 케이스 존재
+- 개선: `Collapse All` 시 모든 task index를 명시적으로 `false` 설정
+
+2. `fieldOverrides` 저장 UX 개선
+
+- 문제: 사용자가 minified JSON을 입력해도 문자열 포맷 차이로 저장이 계속 막히는 오탐
+- 개선: JSON semantic 비교로 mismatch 판정 변경 + blur 시 canonical pretty JSON으로 정규화
+
+3. 탭 이동 보호 동선 재검증
+
+- 미저장 상태에서 tab 이동 시 confirm 노출
+- 취소 시 현재 탭 유지, 승인 시 이동 동작 확인
+
 ## After
 
 ![YAML Studio After (Top)](./assets/studio-ux/studio-after-top.png)
@@ -34,6 +51,8 @@
 - 대량 task 편집 시 인지 부하 감소
 - 원하는 task로 이동 시간이 단축
 - Registry 핵심 값 확인성 개선
+- `fieldOverrides` 편집 시 저장 가능 조건이 예측 가능해짐
+- 탭 이동 시 변경 유실 위험이 낮아짐
 
 ## 다음 리스크 점검 포인트
 

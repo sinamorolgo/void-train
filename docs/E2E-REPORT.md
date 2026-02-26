@@ -68,6 +68,30 @@
 - 원인: JSON 입력이 float64로 해석됨
 - 조치: 모델 `forward`에서 `x.float()` 강제 캐스팅
 
-## 4) 결론
+## 4) YAML Studio E2E (2026-02-26 추가 검증)
+
+검증 항목:
+
+- [x] `Filter tasks` 입력 시 `Showing n/m` 실시간 반영
+- [x] `Collapse All` 실행 시 모든 task 카드가 실제로 collapsed 상태
+- [x] `taskType` 중복 입력 시 즉시 Validation 경고 + Save 비활성화
+- [x] `fieldOverrides` JSON 편집 중 parse/mismatch 경고 및 저장 차단
+- [x] `fieldOverrides`를 valid JSON으로 blur 반영 시 경고 해제 + Save 가능
+- [x] 미저장 상태에서 탭 이동 시 confirm 다이얼로그 표시(취소/승인 모두 확인)
+- [x] `Reset Draft` 후 `In Sync` 복귀
+
+추가로 반영한 수정:
+
+1. `Collapse All` 동작 정합성 수정
+
+- 기존: index 0 fallback 때문에 첫 task가 접히지 않는 케이스 존재
+- 수정: `Collapse All` 시 모든 index를 `false`로 명시 설정
+
+2. `fieldOverrides` 저장 차단 오탐 수정
+
+- 기존: 문자열 포맷(pretty vs minified)만 달라도 mismatch로 판단
+- 수정: JSON 파싱 후 semantic 비교로 변경, blur 시 canonical pretty JSON으로 정규화
+
+## 5) 결론
 
 요청하신 핵심 시나리오(학습 실행/모니터링, MLflow 전환, best 모델 선택, 다운로드, 로컬 및 MLflow 서빙)는 실제 실행으로 검증 완료했습니다.

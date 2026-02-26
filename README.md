@@ -77,3 +77,4 @@ pnpm dev
 - [E2E Report](./docs/E2E-REPORT.md)
 - [Web Usage Guide (with screenshots)](./docs/WEB_USAGE_GUIDE.md)
 - [YAML Studio UX Analysis](./docs/UX_ANALYSIS_YAML_STUDIO.md)
+- [YAML Studio Risk Analysis](./docs/RISK_ANALYSIS_YAML_STUDIO.md)

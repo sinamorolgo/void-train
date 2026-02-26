@@ -106,6 +106,14 @@ function formatDate(value: string | null): string {
   return date.toLocaleString()
 }
 
+function parseFieldOverridesValue(raw: string): Record<string, Record<string, unknown>> {
+  const parsed = JSON.parse(raw || '{}') as unknown
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('fieldOverrides must be a JSON object')
+  }
+  return parsed as Record<string, Record<string, unknown>>
+}
+
 export function CatalogStudioPanel({
   catalogPath,
   modifiedAt,
@@ -163,7 +171,27 @@ export function CatalogStudioPanel({
     return issues
   }, [registryModels, tasks])
 
-  const canSave = validationIssues.length === 0 && !isSaving && !isLoading && tasks.length > 0
+  const overrideErrorCount = useMemo(() => Object.keys(overrideErrors).length, [overrideErrors])
+  const overrideDraftMismatchCount = useMemo(() => {
+    return Object.entries(overridesTextByIndex).filter(([indexText, text]) => {
+      const index = Number(indexText)
+      const task = tasks[index]
+      if (!task) return false
+      try {
+        const parsed = parseFieldOverridesValue(text)
+        return JSON.stringify(parsed) !== JSON.stringify(task.fieldOverrides)
+      } catch {
+        return true
+      }
+    }).length
+  }, [overridesTextByIndex, tasks])
+  const canSave =
+    validationIssues.length === 0 &&
+    overrideErrorCount === 0 &&
+    overrideDraftMismatchCount === 0 &&
+    !isSaving &&
+    !isLoading &&
+    tasks.length > 0
   const filteredTaskEntries = useMemo(
     () =>
       tasks
@@ -252,6 +280,18 @@ export function CatalogStudioPanel({
         </div>
       ) : null}
 
+      {overrideErrorCount > 0 || overrideDraftMismatchCount > 0 ? (
+        <div className="catalog-inline-warning">
+          <strong>fieldOverrides 점검 필요</strong>
+          <ul className="catalog-inline-warning-list">
+            {overrideErrorCount > 0 ? <li>JSON 파싱 오류 {overrideErrorCount}개를 수정하세요.</li> : null}
+            {overrideDraftMismatchCount > 0 ? (
+              <li>수정한 fieldOverrides를 blur 처리(포커스 이동)해 반영한 뒤 저장하세요.</li>
+            ) : null}
+          </ul>
+        </div>
+      ) : null}
+
       {saveError ? (
         <div className="catalog-error" role="alert">
           <p>{saveError}</p>
@@ -278,7 +318,14 @@ export function CatalogStudioPanel({
             >
               Expand All
             </button>
-            <button type="button" onClick={() => setExpandedTaskIndexes({})}>
+            <button
+              type="button"
+              onClick={() =>
+                setExpandedTaskIndexes(
+                  Object.fromEntries(tasks.map((_, index) => [index, false])) as Record<number, boolean>,
+                )
+              }
+            >
               Collapse All
             </button>
           </div>
@@ -437,11 +484,12 @@ export function CatalogStudioPanel({
                           }
                           onBlur={(event) => {
                             try {
-                              const parsed = JSON.parse(event.target.value || '{}') as unknown
-                              if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-                                throw new Error('fieldOverrides must be a JSON object')
-                              }
-                              updateTask(index, { fieldOverrides: parsed as Record<string, Record<string, unknown>> })
+                              const parsed = parseFieldOverridesValue(event.target.value)
+                              updateTask(index, { fieldOverrides: parsed })
+                              setOverridesTextByIndex((prev) => ({
+                                ...prev,
+                                [index]: JSON.stringify(parsed, null, 2),
+                              }))
                               setOverrideErrors((prev) => {
                                 const next = { ...prev }
                                 delete next[index]
