@@ -16,6 +16,7 @@ PyTorch 학습(분류/세그)을 웹 UI로 실행하고 MLflow 중심으로 추�
   - 런타임 기본값(로그/체크포인트/MLflow 연동)
 - UI `YAML Catalog` 탭에서 설정 파일을 조회/검증/저장 가능
 - `Model Serving`에서 `.pth/.pt` 업로드 + 표준 아티팩트 변환 등록 지원
+- `Model Serving > Model Registry Browser`에서 모델별(`classification`/`segmentation`) stage/version 리스트 조회 및 다운로드 지원
 - 클라이언트는 `Dataclass` 기반 설정 + 싱글톤 패턴으로 FTP 모델 다운로드 경로를 관리
 - 학습/레지스트리 Stage를 `dev`/`release`로 분리 운영 가능
 

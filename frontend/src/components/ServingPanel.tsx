@@ -1,17 +1,19 @@
 import { useState } from 'react'
 
-import type { LocalModel, MlflowServeServer, TaskType } from '../types'
+import type { LocalModel, MlflowServeServer, RegistryArtifact, RegistryCatalogModel, TaskType } from '../types'
 import { SectionCard } from './SectionCard'
 import { DownloadFtpCard } from './serving/DownloadFtpCard'
 import { DownloadMlflowCard } from './serving/DownloadMlflowCard'
 import { LocalLoaderCard } from './serving/LocalLoaderCard'
 import { LocalPredictCard } from './serving/LocalPredictCard'
 import { MlflowServeCard } from './serving/MlflowServeCard'
+import { RegistryModelBrowserCard } from './serving/RegistryModelBrowserCard'
 import { RegisterPytorchCard } from './serving/RegisterPytorchCard'
 
 interface ServingPanelProps {
   localModels: LocalModel[]
   mlflowServers: MlflowServeServer[]
+  registryModels: RegistryCatalogModel[]
   busy: boolean
   onDownloadFromMlflow: (payload: {
     trackingUri: string
@@ -47,12 +49,20 @@ interface ServingPanelProps {
     torchTaskType?: 'classification' | 'segmentation'
     torchNumClasses?: number
   }) => void
+  onDownloadRegistryModel: (payload: {
+    modelName: string
+    stage: 'dev' | 'release'
+    version: string
+    artifact: RegistryArtifact
+    destinationDir: string
+  }) => void
   onPredict: (alias: string, inputs: unknown) => void
 }
 
 export function ServingPanel({
   localModels,
   mlflowServers,
+  registryModels,
   busy,
   onDownloadFromMlflow,
   onDownloadFromFtp,
@@ -60,6 +70,7 @@ export function ServingPanel({
   onStopMlflowServing,
   onLoadLocalModel,
   onPublishFtpModel,
+  onDownloadRegistryModel,
   onPredict,
 }: ServingPanelProps) {
   const [trackingUri, setTrackingUri] = useState('http://127.0.0.1:5001')
@@ -151,6 +162,12 @@ export function ServingPanel({
       </div>
 
       <div className="mlflow-grid">
+        <RegistryModelBrowserCard
+          models={registryModels}
+          busy={busy}
+          onDownload={onDownloadRegistryModel}
+        />
+
         <RegisterPytorchCard
           modelName={registerModelName}
           stage={registerStage}

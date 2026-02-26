@@ -102,6 +102,27 @@ TRAINING_CATALOG_PATH=./backend/config/training_catalog.yaml
 - 시작 방법/타깃 (`runner.startMethod`, `runner.target`, `runner.targetEnvVar`)
 - UI 폼/args 구성 (`fieldOrder`, `hiddenFields`, `fieldOverrides`)
 - MLflow 기본값 (`mlflow.metric`, `mlflow.mode`, `mlflow.modelName`, `mlflow.artifactPath`)
+- 모델 브라우저 노출/기본값 (`registryModels`)
+
+`registryModels` 예시:
+
+```yaml
+registryModels:
+  - id: classification
+    title: Classification Model
+    taskType: classification
+    modelName: classification-best-model
+    defaultStage: release
+    defaultVersion: latest
+    defaultDestinationDir: ./backend/artifacts/downloads
+  - id: segmentation
+    title: Segmentation Model
+    taskType: segmentation
+    modelName: segmentation-best-model
+    defaultStage: release
+    defaultVersion: latest
+    defaultDestinationDir: ./backend/artifacts/downloads
+```
 
 ## 6) TensorBoard → MLflow 빠른 전환
 
@@ -165,6 +186,7 @@ print("VTM_RUN_META::" + json.dumps({"mlflow_run_id": run.info.run_id}), flush=T
 
 - UI에서 FTP 정보 입력 → 모델 파일 다운로드
 - UI의 `Register .pth/.pt to FTP` 카드에서 로컬 `.pth/.pt`를 바로 publish 가능
+- UI의 `Model Registry Browser` 카드에서 모델별(dev/release stage, version) 목록 확인 + 선택 다운로드
 - `Convert to Torch Standard` 체크 시 `model-standard.pt` 생성/등록
 - `Local Loader`로 checkpoint 로드 후 `Local Predict` 사용
 

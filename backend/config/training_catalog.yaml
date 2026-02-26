@@ -82,3 +82,20 @@ tasks:
       default: seg-quick-run
     encoder_name:
       default: tiny-unet-like
+registryModels:
+- id: classification
+  title: Classification Model
+  description: Primary checkpoint family for classification inference/download flows.
+  taskType: classification
+  modelName: classification-best-model
+  defaultStage: release
+  defaultVersion: latest
+  defaultDestinationDir: ./backend/artifacts/downloads
+- id: segmentation
+  title: Segmentation Model
+  description: Primary checkpoint family for segmentation inference/download flows.
+  taskType: segmentation
+  modelName: segmentation-best-model
+  defaultStage: release
+  defaultVersion: latest
+  defaultDestinationDir: ./backend/artifacts/downloads

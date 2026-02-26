@@ -8,6 +8,8 @@ import type {
   LocalModel,
   MlflowRunItem,
   MlflowServeServer,
+  RegistryArtifact,
+  RegistryCatalogModel,
   RegistryStage,
   RunItem,
   TaskSchema,
@@ -117,6 +119,30 @@ export const api = {
     torchNumClasses?: number
   }): Promise<Record<string, unknown>> => {
     const { data } = await client.post('/ftp-registry/publish', payload)
+    return data
+  },
+  getRegistryCatalogModels: async (): Promise<RegistryCatalogModel[]> => {
+    const { data } = await client.get<{ items: RegistryCatalogModel[] }>('/ftp-registry/catalog-models', {
+      params: { includeVersions: true },
+    })
+    return data.items
+  },
+  downloadRegistryModel: async (payload: {
+    modelName: string
+    stage: RegistryStage
+    version: string
+    artifact: RegistryArtifact
+    destinationDir: string
+  }): Promise<{
+    modelName: string
+    stage: RegistryStage
+    requestedVersion: string
+    resolvedVersion: string
+    artifact: RegistryArtifact
+    remotePath: string
+    localPath: string
+  }> => {
+    const { data } = await client.post('/ftp-registry/download', payload)
     return data
   },
   startMlflowServing: async (payload: {

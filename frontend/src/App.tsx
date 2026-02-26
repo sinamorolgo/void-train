@@ -121,6 +121,12 @@ export default function App() {
     refetchInterval: 3000,
   })
 
+  const registryModelsQuery = useQuery({
+    queryKey: ['ftp-registry-catalog-models'],
+    queryFn: api.getRegistryCatalogModels,
+    refetchInterval: 5000,
+  })
+
   const launchMutation = useMutation({
     mutationFn: () => api.startRun(selectedTask, selectedValues),
     onSuccess: (run) => {
@@ -220,6 +226,7 @@ export default function App() {
       pushNotice('success', 'Serving action completed', JSON.stringify(result, null, 2))
       queryClient.invalidateQueries({ queryKey: ['mlflow-serving'] })
       queryClient.invalidateQueries({ queryKey: ['local-models'] })
+      queryClient.invalidateQueries({ queryKey: ['ftp-registry-catalog-models'] })
     },
     onError: (error) => pushNotice('error', 'Serving action failed', errorMessage(error)),
   })
@@ -422,9 +429,11 @@ export default function App() {
             <ServingPanel
               localModels={localModelsQuery.data ?? []}
               mlflowServers={mlflowServingQuery.data ?? []}
+              registryModels={registryModelsQuery.data ?? []}
               busy={isBusy}
               onDownloadFromMlflow={(payload) => servingMutation.mutate(() => api.downloadModelFromMlflow(payload))}
               onDownloadFromFtp={(payload) => servingMutation.mutate(() => api.downloadModelFromFtp(payload))}
+              onDownloadRegistryModel={(payload) => servingMutation.mutate(() => api.downloadRegistryModel(payload))}
               onStartMlflowServing={(payload) => servingMutation.mutate(() => api.startMlflowServing(payload))}
               onStopMlflowServing={(serverId) => servingMutation.mutate(() => api.stopMlflowServing(serverId))}
               onLoadLocalModel={(payload) => servingMutation.mutate(() => api.loadLocalModel(payload))}

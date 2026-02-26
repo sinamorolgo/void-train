@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from app.api.schemas import (
     DownloadFromFtpRequest,
     DownloadFromMlflowRequest,
+    DownloadRegisteredFtpModelRequest,
     LoadLocalModelRequest,
     MigrateTensorBoardRequest,
     PromoteFtpModelRequest,
@@ -24,6 +25,7 @@ from app.api.schemas import (
     ValidateCatalogRequest,
 )
 from app.core.task_catalog import (
+    RegistryModelDefinition,
     TaskDefinition,
     get_task_catalog,
     parse_catalog_yaml,
@@ -127,6 +129,74 @@ def _task_summary(task: TaskDefinition) -> dict[str, Any]:
     }
 
 
+def _registry_model_summary(item: RegistryModelDefinition) -> dict[str, Any]:
+    return {
+        "id": item.model_id,
+        "title": item.title,
+        "description": item.description,
+        "taskType": item.task_type,
+        "modelName": item.model_name,
+        "defaultStage": item.default_stage,
+        "defaultVersion": item.default_version,
+        "defaultDestinationDir": item.default_destination_dir,
+    }
+
+
+def _registry_stage_snapshot(*, stage: StageType, model_name: str, include_versions: bool) -> dict[str, Any]:
+    try:
+        index = ftp_registry.get_model(stage=stage, model_name=model_name)
+    except FileNotFoundError:
+        return {
+            "exists": False,
+            "latest": None,
+            "versionCount": 0,
+            "updatedAt": None,
+            "versions": [],
+        }
+
+    versions_raw = index.get("versions", [])
+    versions: list[dict[str, Any]] = []
+    for entry in versions_raw:
+        if not isinstance(entry, dict):
+            continue
+        source = entry.get("source") if isinstance(entry.get("source"), dict) else {}
+        versions.append(
+            {
+                "version": str(entry.get("version", "")),
+                "createdAt": entry.get("createdAt"),
+                "notes": entry.get("notes"),
+                "sourceType": source.get("type"),
+                "bundle": entry.get("bundle"),
+                "manifest": entry.get("manifest"),
+                "hasTorchStandard": bool(
+                    isinstance(entry.get("standardArtifacts"), dict)
+                    and entry.get("standardArtifacts", {}).get("pytorch")
+                ),
+            }
+        )
+
+    versions.sort(key=lambda item: str(item.get("createdAt") or ""), reverse=True)
+
+    return {
+        "exists": True,
+        "latest": index.get("latest"),
+        "versionCount": len(versions_raw),
+        "updatedAt": index.get("updatedAt"),
+        "versions": versions if include_versions else [],
+    }
+
+
+def _ftp_download_host(value: str | None) -> str:
+    host = (value or "").strip()
+    if host:
+        return host
+
+    default_host = settings.ftp_default_host.strip()
+    if default_host in {"0.0.0.0", "::"}:
+        return "127.0.0.1"
+    return default_host or "127.0.0.1"
+
+
 def _catalog_payload_response(*, content: str, exists: bool, source_path: Path) -> dict[str, Any]:
     parsed = parse_catalog_yaml(content, source=str(source_path))
     catalog = validate_catalog_payload(parsed, source=str(source_path))
@@ -140,6 +210,8 @@ def _catalog_payload_response(*, content: str, exists: bool, source_path: Path) 
         "content": content,
         "taskCount": len(catalog.list_tasks()),
         "tasks": [_task_summary(task) for task in catalog.list_tasks()],
+        "registryModelCount": len(catalog.list_registry_models()),
+        "registryModels": [_registry_model_summary(item) for item in catalog.list_registry_models()],
     }
 
 
@@ -158,6 +230,15 @@ def config_schemas() -> dict[str, Any]:
     def _run() -> dict[str, Any]:
         catalog = get_task_catalog()
         return {"items": [_build_task_schema(task) for task in catalog.list_tasks()]}
+
+    return _as_bad_request(_run)
+
+
+@router.get("/registry-models")
+def registry_models() -> dict[str, Any]:
+    def _run() -> dict[str, Any]:
+        catalog = get_task_catalog()
+        return {"items": [_registry_model_summary(item) for item in catalog.list_registry_models()]}
 
     return _as_bad_request(_run)
 
@@ -477,6 +558,81 @@ def promote_ftp_model(payload: PromoteFtpModelRequest) -> dict[str, Any]:
             notes=payload.notes,
         )
     )
+
+
+@router.get("/ftp-registry/catalog-models")
+def list_catalog_registry_models(includeVersions: bool = True) -> dict[str, Any]:
+    def _run() -> dict[str, Any]:
+        catalog = get_task_catalog()
+        items: list[dict[str, Any]] = []
+
+        for model in catalog.list_registry_models():
+            item = _registry_model_summary(model)
+            item["stages"] = {
+                "dev": _registry_stage_snapshot(
+                    stage="dev",
+                    model_name=model.model_name,
+                    include_versions=includeVersions,
+                ),
+                "release": _registry_stage_snapshot(
+                    stage="release",
+                    model_name=model.model_name,
+                    include_versions=includeVersions,
+                ),
+            }
+            items.append(item)
+
+        return {"items": items}
+
+    return _as_bad_request(_run)
+
+
+@router.post("/ftp-registry/download")
+def download_ftp_registry_model(payload: DownloadRegisteredFtpModelRequest) -> dict[str, Any]:
+    validated_stage = _validate_stage(payload.stage)
+
+    def _run() -> dict[str, Any]:
+        resolved = ftp_registry.resolve(
+            stage=validated_stage,
+            model_name=payload.modelName,
+            version=payload.version,
+        )
+
+        remote_path = str(resolved["bundlePath"])
+        if payload.artifact == "manifest":
+            remote_path = str(resolved["manifestPath"])
+        elif payload.artifact == "standard_pytorch":
+            entry = resolved.get("entry")
+            if not isinstance(entry, dict):
+                raise FileNotFoundError("Registry entry does not include standard artifact metadata")
+            standard = entry.get("standardArtifacts")
+            if not isinstance(standard, dict):
+                raise FileNotFoundError("Standard PyTorch artifact not found in this model version")
+            artifact_path = standard.get("pytorch")
+            if not isinstance(artifact_path, str) or not artifact_path.strip():
+                raise FileNotFoundError("Standard PyTorch artifact path is missing")
+            remote_path = artifact_path
+
+        local_path = download_file_via_ftp(
+            host=_ftp_download_host(payload.host),
+            port=payload.port or settings.ftp_default_port,
+            username=payload.username or settings.ftp_default_username,
+            password=payload.password or settings.ftp_default_password,
+            remote_path=remote_path,
+            destination_dir=payload.destinationDir,
+        )
+
+        return {
+            "modelName": payload.modelName,
+            "stage": validated_stage,
+            "requestedVersion": payload.version,
+            "resolvedVersion": resolved["resolvedVersion"],
+            "artifact": payload.artifact,
+            "remotePath": remote_path,
+            "localPath": local_path,
+        }
+
+    return _as_bad_request(_run)
 
 
 @router.get("/ftp-registry/models")

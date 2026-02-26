@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import os
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -14,6 +15,7 @@ from app.core.train_config import TaskType
 
 RunnerStartMethod = Literal["python_script", "python_module"]
 MlflowMode = Literal["max", "min"]
+RegistryStage = Literal["dev", "release"]
 
 DEFAULT_CATALOG: dict[str, Any] = {
     "tasks": [
@@ -108,7 +110,29 @@ DEFAULT_CATALOG: dict[str, Any] = {
                 "encoder_name": {"default": "tiny-unet-like"},
             },
         },
-    ]
+    ],
+    "registryModels": [
+        {
+            "id": "classification",
+            "title": "Classification Model",
+            "description": "Primary checkpoint family for classification inference/download flows.",
+            "taskType": "classification",
+            "modelName": "classification-best-model",
+            "defaultStage": "release",
+            "defaultVersion": "latest",
+            "defaultDestinationDir": "./backend/artifacts/downloads",
+        },
+        {
+            "id": "segmentation",
+            "title": "Segmentation Model",
+            "description": "Primary checkpoint family for segmentation inference/download flows.",
+            "taskType": "segmentation",
+            "modelName": "segmentation-best-model",
+            "defaultStage": "release",
+            "defaultVersion": "latest",
+            "defaultDestinationDir": "./backend/artifacts/downloads",
+        },
+    ],
 }
 
 
@@ -163,6 +187,22 @@ def _to_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _normalize_registry_id(value: str, *, fallback: str) -> str:
+    candidate = value.strip().lower().replace(" ", "-")
+    candidate = re.sub(r"[^a-z0-9_-]", "", candidate)
+    candidate = candidate.strip("-_")
+    return candidate or fallback
+
+
+def _to_registry_stage(value: Any, *, default: RegistryStage, field_name: str) -> RegistryStage:
+    if value is None:
+        return default
+    stage = str(value).strip().lower()
+    if stage in {"dev", "release"}:
+        return stage  # type: ignore[return-value]
+    raise ValueError(f"Invalid value for {field_name}: {value!r}")
+
+
 @dataclass(frozen=True)
 class RunnerConfig:
     start_method: RunnerStartMethod
@@ -207,10 +247,24 @@ class TaskDefinition:
         return defaults
 
 
+@dataclass(frozen=True)
+class RegistryModelDefinition:
+    model_id: str
+    title: str
+    description: str
+    task_type: TaskType
+    model_name: str
+    default_stage: RegistryStage
+    default_version: str
+    default_destination_dir: str
+
+
 class TaskCatalog:
-    def __init__(self, tasks: list[TaskDefinition]) -> None:
+    def __init__(self, tasks: list[TaskDefinition], registry_models: list[RegistryModelDefinition]) -> None:
         self._tasks = [task for task in tasks if task.enabled]
         self._task_map = {task.task_type: task for task in self._tasks}
+        self._registry_models = list(registry_models)
+        self._registry_model_map = {item.model_id: item for item in self._registry_models}
 
     def list_tasks(self) -> list[TaskDefinition]:
         return list(self._tasks)
@@ -221,6 +275,16 @@ class TaskCatalog:
             known = ", ".join(sorted(self._task_map))
             raise KeyError(f"Unknown taskType: {task_type}. configured=[{known}]")
         return task
+
+    def list_registry_models(self) -> list[RegistryModelDefinition]:
+        return list(self._registry_models)
+
+    def get_registry_model(self, model_id: str) -> RegistryModelDefinition:
+        item = self._registry_model_map.get(model_id)
+        if item is None:
+            known = ", ".join(sorted(self._registry_model_map))
+            raise KeyError(f"Unknown registry model id: {model_id}. configured=[{known}]")
+        return item
 
 
 def _parse_task(raw: dict[str, Any]) -> TaskDefinition:
@@ -291,6 +355,70 @@ def _parse_task(raw: dict[str, Any]) -> TaskDefinition:
     )
 
 
+def _parse_registry_model(raw: dict[str, Any], *, fallback_id: str, source: str) -> RegistryModelDefinition:
+    model_name = _to_str(raw.get("modelName"), field_name=f"{source}.modelName")
+
+    task_type = _to_str(raw.get("taskType", "classification"), field_name=f"{source}.taskType")
+    if task_type not in {"classification", "segmentation"}:
+        raise ValueError(f"Unsupported taskType for {source}: {task_type}")
+
+    model_id = _normalize_registry_id(
+        str(raw.get("id", "") or model_name),
+        fallback=fallback_id,
+    )
+    title = str(raw.get("title", "")).strip() or model_name
+    description = str(raw.get("description", "")).strip()
+    default_stage = _to_registry_stage(
+        raw.get("defaultStage"),
+        default="release",
+        field_name=f"{source}.defaultStage",
+    )
+    default_version = str(raw.get("defaultVersion", "latest")).strip() or "latest"
+    default_destination_dir = str(
+        raw.get("defaultDestinationDir", "./backend/artifacts/downloads")
+    ).strip() or "./backend/artifacts/downloads"
+
+    return RegistryModelDefinition(
+        model_id=model_id,
+        title=title,
+        description=description,
+        task_type=task_type,  # type: ignore[arg-type]
+        model_name=model_name,
+        default_stage=default_stage,
+        default_version=default_version,
+        default_destination_dir=os.path.expandvars(default_destination_dir),
+    )
+
+
+def _derive_registry_models_from_tasks(tasks: list[TaskDefinition]) -> list[RegistryModelDefinition]:
+    items: list[RegistryModelDefinition] = []
+    seen_ids: set[str] = set()
+
+    for task in tasks:
+        base_id = _normalize_registry_id(task.task_type, fallback="model")
+        candidate_id = base_id
+        suffix = 2
+        while candidate_id in seen_ids:
+            candidate_id = f"{base_id}-{suffix}"
+            suffix += 1
+        seen_ids.add(candidate_id)
+
+        items.append(
+            RegistryModelDefinition(
+                model_id=candidate_id,
+                title=f"{task.title} Model",
+                description=f"Configured from task '{task.task_type}'",
+                task_type=task.base_task_type,
+                model_name=task.mlflow.model_name,
+                default_stage="release",
+                default_version="latest",
+                default_destination_dir="./backend/artifacts/downloads",
+            )
+        )
+
+    return items
+
+
 def validate_catalog_payload(payload: dict[str, Any], *, source: str) -> TaskCatalog:
     tasks_raw = payload.get("tasks", [])
     if not isinstance(tasks_raw, list):
@@ -299,7 +427,29 @@ def validate_catalog_payload(payload: dict[str, Any], *, source: str) -> TaskCat
     tasks = [_parse_task(item) for item in tasks_raw if isinstance(item, dict)]
     if not tasks:
         raise ValueError(f"No tasks configured in catalog: {source}")
-    return TaskCatalog(tasks)
+
+    registry_raw = payload.get("registryModels")
+    registry_models: list[RegistryModelDefinition] = []
+
+    if registry_raw is None:
+        registry_models = _derive_registry_models_from_tasks(tasks)
+    else:
+        if not isinstance(registry_raw, list):
+            raise ValueError(f"Invalid catalog format. 'registryModels' must be a list: {source}")
+        seen_ids: set[str] = set()
+        for index, item in enumerate(registry_raw):
+            if not isinstance(item, dict):
+                raise ValueError(f"Invalid registry model at index={index}: expected object")
+            parsed = _parse_registry_model(item, fallback_id=f"model-{index + 1}", source=f"registryModels[{index}]")
+            if parsed.model_id in seen_ids:
+                raise ValueError(f"Duplicate registry model id: {parsed.model_id}")
+            seen_ids.add(parsed.model_id)
+            registry_models.append(parsed)
+
+        if not registry_models:
+            registry_models = _derive_registry_models_from_tasks(tasks)
+
+    return TaskCatalog(tasks, registry_models)
 
 
 class TaskCatalogService:

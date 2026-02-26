@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 TaskType = str
 BaseTaskType = Literal["classification", "segmentation"]
 RegistryStage = Literal["dev", "release"]
+RegistryArtifact = Literal["bundle", "manifest", "standard_pytorch"]
 
 
 class StartRunRequest(BaseModel):
@@ -53,6 +54,18 @@ class DownloadFromFtpRequest(BaseModel):
     password: str
     remotePath: str
     destinationDir: str = "./backend/artifacts/downloads"
+
+
+class DownloadRegisteredFtpModelRequest(BaseModel):
+    modelName: str
+    stage: RegistryStage = "release"
+    version: str = "latest"
+    artifact: RegistryArtifact = "bundle"
+    destinationDir: str = "./backend/artifacts/downloads"
+    host: str | None = None
+    port: int | None = None
+    username: str | None = None
+    password: str | None = None
 
 
 class MigrateTensorBoardRequest(BaseModel):

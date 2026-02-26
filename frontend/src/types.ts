@@ -1,6 +1,7 @@
 export type TaskType = string
 export type BaseTaskType = 'classification' | 'segmentation'
 export type RegistryStage = 'dev' | 'release'
+export type RegistryArtifact = 'bundle' | 'manifest' | 'standard_pytorch'
 
 export type FieldType = 'text' | 'number' | 'boolean' | 'select'
 
@@ -104,6 +105,36 @@ export interface CatalogTaskSummary {
   runnerStartMethod: 'python_script' | 'python_module'
   fieldOverrideCount: number
   fieldOrderCount: number
+}
+
+export interface RegistryVersionSummary {
+  version: string
+  createdAt: string | null
+  notes: string | null
+  sourceType: string | null
+  bundle: string | null
+  manifest: string | null
+  hasTorchStandard: boolean
+}
+
+export interface RegistryStageSnapshot {
+  exists: boolean
+  latest: string | null
+  versionCount: number
+  updatedAt: string | null
+  versions: RegistryVersionSummary[]
+}
+
+export interface RegistryCatalogModel {
+  id: string
+  title: string
+  description: string
+  taskType: BaseTaskType
+  modelName: string
+  defaultStage: RegistryStage
+  defaultVersion: string
+  defaultDestinationDir: string
+  stages: Record<RegistryStage, RegistryStageSnapshot>
 }
 
 export interface CatalogDocument {
