@@ -136,6 +136,9 @@ DEFAULT_CATALOG: dict[str, Any] = {
             "defaultDestinationDir": "./backend/artifacts/downloads",
         },
     ],
+    "runtime": {
+        "availableGpuIds": [],
+    },
 }
 
 
@@ -481,11 +484,18 @@ def _parse_extra_fields(
 
 
 class TaskCatalog:
-    def __init__(self, tasks: list[TaskDefinition], registry_models: list[RegistryModelDefinition]) -> None:
+    def __init__(
+        self,
+        tasks: list[TaskDefinition],
+        registry_models: list[RegistryModelDefinition],
+        *,
+        available_gpu_ids: list[int] | None = None,
+    ) -> None:
         self._tasks = [task for task in tasks if task.enabled]
         self._task_map = {task.task_type: task for task in self._tasks}
         self._registry_models = list(registry_models)
         self._registry_model_map = {item.model_id: item for item in self._registry_models}
+        self._available_gpu_ids = tuple(available_gpu_ids or [])
 
     def list_tasks(self) -> list[TaskDefinition]:
         return list(self._tasks)
@@ -506,6 +516,9 @@ class TaskCatalog:
             known = ", ".join(sorted(self._registry_model_map))
             raise KeyError(f"Unknown registry model id: {model_id}. configured=[{known}]")
         return item
+
+    def available_gpu_ids(self) -> list[int]:
+        return list(self._available_gpu_ids)
 
 
 def _parse_task(raw: dict[str, Any]) -> TaskDefinition:
@@ -700,12 +713,49 @@ def _parse_registry_models(
     return registry_models
 
 
+def _parse_available_gpu_ids(payload: dict[str, Any], *, source: str) -> list[int]:
+    runtime_raw = payload.get("runtime")
+    if runtime_raw is None:
+        return []
+    if not isinstance(runtime_raw, dict):
+        raise ValueError(f"Invalid catalog format. 'runtime' must be an object: {source}")
+
+    gpu_ids_raw = runtime_raw.get("availableGpuIds")
+    if gpu_ids_raw is None:
+        return []
+    if not isinstance(gpu_ids_raw, list):
+        raise ValueError(f"Invalid catalog format. 'runtime.availableGpuIds' must be a list: {source}")
+
+    parsed_gpu_ids: list[int] = []
+    for index, item in enumerate(gpu_ids_raw):
+        try:
+            gpu_id = int(item)
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"Invalid gpu id at runtime.availableGpuIds[{index}]: {item!r}. expected non-negative integer."
+            ) from error
+        if gpu_id < 0:
+            raise ValueError(
+                f"Invalid gpu id at runtime.availableGpuIds[{index}]: {item!r}. expected non-negative integer."
+            )
+        parsed_gpu_ids.append(gpu_id)
+
+    duplicate_gpu_ids = _find_duplicate_values([str(item) for item in parsed_gpu_ids])
+    if duplicate_gpu_ids:
+        raise ValueError(
+            "Duplicate GPU ids detected in runtime.availableGpuIds: "
+            + ", ".join(duplicate_gpu_ids)
+        )
+    return parsed_gpu_ids
+
+
 def validate_catalog_payload(payload: dict[str, Any], *, source: str) -> TaskCatalog:
     tasks = _parse_task_definitions(payload.get("tasks", []), source=source)
     _raise_if_duplicate_task_types(tasks)
     registry_models = _parse_registry_models(payload.get("registryModels"), tasks=tasks, source=source)
+    available_gpu_ids = _parse_available_gpu_ids(payload, source=source)
 
-    return TaskCatalog(tasks, registry_models)
+    return TaskCatalog(tasks, registry_models, available_gpu_ids=available_gpu_ids)
 
 
 class TaskCatalogService:

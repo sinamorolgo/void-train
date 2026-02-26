@@ -147,6 +147,52 @@ class RunManagerExtraFieldsTest(unittest.TestCase):
 
             self.assertIn("Missing required extra field: dataset_tag", str(context.exception))
 
+    def test_start_run_rejects_gpu_ids_not_in_runtime_available_gpu_ids(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="run-manager-gpu-validate-") as temp_dir:
+            temp_path = Path(temp_dir)
+            script_path = temp_path / "train_external.py"
+            script_path.write_text("print('ok')\n", encoding="utf-8")
+
+            catalog_path = temp_path / "training_catalog.yaml"
+            catalog_path.write_text(
+                textwrap.dedent(
+                    f"""
+                    tasks:
+                      - taskType: cls-gpu-validate
+                        enabled: true
+                        title: External Classification
+                        baseTaskType: classification
+                        runner:
+                          startMethod: python_script
+                          target: {script_path}
+                        mlflow:
+                          metric: val_accuracy
+                          mode: max
+                          modelName: cls-gpu-validate-best
+                          artifactPath: model
+                    runtime:
+                      availableGpuIds: [0]
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            catalog = TaskCatalogService(catalog_path).load()
+            with patch("app.services.run_manager.get_task_catalog", return_value=catalog):
+                manager = RunManager()
+                with self.assertRaises(ValueError) as context:
+                    manager.start_run(
+                        "cls-gpu-validate",
+                        {
+                            "dataset_root": str(temp_path / "datasets"),
+                            "output_root": str(temp_path / "outputs"),
+                            "gpu_ids": "1",
+                        },
+                    )
+
+            self.assertIn("Invalid gpu_ids for current server", str(context.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

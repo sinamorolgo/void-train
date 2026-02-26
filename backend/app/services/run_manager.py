@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.settings import get_settings
-from app.core.task_catalog import ExtraFieldDefinition, RunnerConfig, TaskDefinition, get_task_catalog
+from app.core.task_catalog import ExtraFieldDefinition, RunnerConfig, TaskCatalog, TaskDefinition, get_task_catalog
 from app.core.train_config import (
     PROGRESS_PREFIX,
     RUN_META_PREFIX,
@@ -210,6 +210,45 @@ class RunManager:
 
         return cli_args, resolved
 
+    def _parse_gpu_ids(self, raw_gpu_ids: Any) -> list[int]:
+        text = str(raw_gpu_ids or "").strip()
+        if not text:
+            return []
+
+        parsed_gpu_ids: list[int] = []
+        for token in text.split(","):
+            candidate = token.strip()
+            if not candidate:
+                continue
+            try:
+                gpu_id = int(candidate)
+            except ValueError as error:
+                raise ValueError(f"Invalid gpu_ids value: {raw_gpu_ids!r}") from error
+            if gpu_id < 0:
+                raise ValueError(f"Invalid gpu_ids value: {raw_gpu_ids!r}")
+            parsed_gpu_ids.append(gpu_id)
+        return parsed_gpu_ids
+
+    def _validate_gpu_ids(self, *, catalog: TaskCatalog, prepared_values: dict[str, Any]) -> None:
+        available_gpu_ids = catalog.available_gpu_ids()
+        if not available_gpu_ids:
+            return
+
+        if parse_bool(prepared_values.get("force_cpu", False)):
+            return
+
+        requested_gpu_ids = self._parse_gpu_ids(prepared_values.get("gpu_ids", ""))
+        available_gpu_id_set = set(available_gpu_ids)
+        invalid_gpu_ids = sorted({gpu_id for gpu_id in requested_gpu_ids if gpu_id not in available_gpu_id_set})
+
+        if invalid_gpu_ids:
+            raise ValueError(
+                "Invalid gpu_ids for current server. "
+                f"requested={requested_gpu_ids}, "
+                f"available={available_gpu_ids}, "
+                f"invalid={invalid_gpu_ids}"
+            )
+
     def start_run(self, task_type: str, raw_config: dict[str, Any]) -> dict[str, Any]:
         task_catalog = get_task_catalog()
         task = task_catalog.get_task(task_type)
@@ -222,6 +261,7 @@ class RunManager:
             task_alias=task.task_type,
             base_task_type=task.base_task_type,
         )
+        self._validate_gpu_ids(catalog=task_catalog, prepared_values=prepared_values)
         config = build_config(task.base_task_type, prepared_values)
         config_data = config_to_dict(config)
         extra_cli_args, extra_config_data = self._build_extra_cli_args(task, prepared_values)

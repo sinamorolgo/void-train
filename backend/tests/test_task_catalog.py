@@ -232,6 +232,40 @@ class TaskCatalogTest(unittest.TestCase):
         self.assertEqual(registry_models[0].default_stage, "release")
         self.assertEqual(registry_models[0].default_destination_dir, "./backend/artifacts/downloads")
 
+    def test_runtime_available_gpu_ids_parsed(self) -> None:
+        payload = {
+            "tasks": [
+                {
+                    "taskType": "classification",
+                    "title": "Classification",
+                    "baseTaskType": "classification",
+                    "runner": {"target": "backend/trainers/train_classification.py"},
+                }
+            ],
+            "runtime": {"availableGpuIds": [0, "1"]},
+        }
+
+        catalog = validate_catalog_payload(payload, source="test")
+        self.assertEqual(catalog.available_gpu_ids(), [0, 1])
+
+    def test_runtime_available_gpu_ids_duplicate_raises(self) -> None:
+        payload = {
+            "tasks": [
+                {
+                    "taskType": "classification",
+                    "title": "Classification",
+                    "baseTaskType": "classification",
+                    "runner": {"target": "backend/trainers/train_classification.py"},
+                }
+            ],
+            "runtime": {"availableGpuIds": [0, 0]},
+        }
+
+        with self.assertRaises(ValueError) as context:
+            validate_catalog_payload(payload, source="test")
+
+        self.assertIn("Duplicate GPU ids detected", str(context.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

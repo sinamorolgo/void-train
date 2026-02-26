@@ -99,3 +99,5 @@ registryModels:
   defaultStage: release
   defaultVersion: latest
   defaultDestinationDir: ./backend/artifacts/downloads
+runtime:
+  availableGpuIds: []

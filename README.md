@@ -73,6 +73,7 @@ pnpm dev
   - task별 시작 방식(`python_script` 또는 `python_module`)과 실행 타깃
   - task별 field 순서/숨김/기본값/라벨/설명
   - task별 동적 CLI 인자(`extraFields`: 타입/필수 여부/기본값/choices/CLI flag)
+  - 런타임 GPU 허용 목록(`runtime.availableGpuIds`: 예 `[0, 1]`)
   - MLflow best metric/mode/modelName/artifactPath 기본값
 
 ### 외부 `train.py` + YAML 인자 정의 예시
