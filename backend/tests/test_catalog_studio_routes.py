@@ -135,6 +135,46 @@ class CatalogStudioRoutesTest(unittest.TestCase):
         self.assertEqual(context.exception.status_code, 400)
         self.assertIn("No tasks configured", str(context.exception.detail))
 
+    def test_save_catalog_studio_rejects_duplicate_task_type(self) -> None:
+        payload = SaveCatalogStudioRequest(
+            tasks=[
+                CatalogStudioTaskItem(
+                    taskType="classification",
+                    enabled=True,
+                    title="Classification A",
+                    description="A",
+                    baseTaskType="classification",
+                    runnerStartMethod="python_script",
+                    runnerTarget="backend/trainers/train_classification.py",
+                    mlflowMetric="val_accuracy",
+                    mlflowMode="max",
+                    mlflowModelName="classification-best-model",
+                    mlflowArtifactPath="model",
+                ),
+                CatalogStudioTaskItem(
+                    taskType="classification",
+                    enabled=True,
+                    title="Classification B",
+                    description="B",
+                    baseTaskType="classification",
+                    runnerStartMethod="python_script",
+                    runnerTarget="backend/trainers/train_classification.py",
+                    mlflowMetric="val_accuracy",
+                    mlflowMode="max",
+                    mlflowModelName="classification-best-model-b",
+                    mlflowArtifactPath="model",
+                ),
+            ],
+            registryModels=[],
+            createBackup=False,
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            routes.save_catalog_studio(payload)
+
+        self.assertEqual(context.exception.status_code, 400)
+        self.assertIn("Duplicate taskType detected", str(context.exception.detail))
+
 
 if __name__ == "__main__":
     unittest.main()

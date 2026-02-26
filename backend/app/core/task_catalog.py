@@ -428,6 +428,16 @@ def validate_catalog_payload(payload: dict[str, Any], *, source: str) -> TaskCat
     if not tasks:
         raise ValueError(f"No tasks configured in catalog: {source}")
 
+    seen_task_types: set[str] = set()
+    duplicated_task_types: set[str] = set()
+    for task in tasks:
+        if task.task_type in seen_task_types:
+            duplicated_task_types.add(task.task_type)
+        seen_task_types.add(task.task_type)
+    if duplicated_task_types:
+        duplicated = ", ".join(sorted(duplicated_task_types))
+        raise ValueError(f"Duplicate taskType detected in catalog: {duplicated}")
+
     registry_raw = payload.get("registryModels")
     registry_models: list[RegistryModelDefinition] = []
 

@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from app.api.routes import _build_task_schema
-from app.core.task_catalog import TaskCatalogService
+from app.core.task_catalog import TaskCatalogService, validate_catalog_payload
 
 
 class TaskCatalogTest(unittest.TestCase):
@@ -105,6 +105,28 @@ class TaskCatalogTest(unittest.TestCase):
             self.assertEqual(registry_models[0].model_id, "clf-main")
             self.assertEqual(registry_models[0].default_stage, "release")
             self.assertEqual(registry_models[0].default_destination_dir, "./downloads")
+
+    def test_duplicate_task_type_raises(self) -> None:
+        payload = {
+            "tasks": [
+                {
+                    "taskType": "classification",
+                    "title": "Classification 1",
+                    "baseTaskType": "classification",
+                    "runner": {"target": "backend/trainers/train_classification.py"},
+                },
+                {
+                    "taskType": "classification",
+                    "title": "Classification 2",
+                    "baseTaskType": "classification",
+                    "runner": {"target": "backend/trainers/train_classification.py"},
+                },
+            ]
+        }
+        with self.assertRaises(ValueError) as context:
+            validate_catalog_payload(payload, source="test")
+
+        self.assertIn("Duplicate taskType detected", str(context.exception))
 
 
 if __name__ == "__main__":
