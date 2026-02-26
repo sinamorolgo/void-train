@@ -7,6 +7,8 @@ PyTorch 학습(분류/세그)을 웹 UI로 실행하고 MLflow 중심으로 추�
 모델 배포는 UI의 `Model Serving` 섹션에서 `.pth/.pt`를 FTP 레지스트리에 등록하고,
 선택적으로 PyTorch 표준 아티팩트(`model-standard.pt`)로 변환 등록할 수 있습니다.
 
+![Void Train Manager - Operations Overview](./docs/assets/web-usage/web-operations-overview.png)
+
 ## 최근 반영 사항
 
 - `backend/config/training_catalog.yaml` 단일 파일로 다음을 일원화:
@@ -73,3 +75,4 @@ pnpm dev
 - [Architecture](./docs/ARCHITECTURE.md)
 - [FTP Model Registry](./docs/FTP_MODEL_REGISTRY.md)
 - [E2E Report](./docs/E2E-REPORT.md)
+- [Web Usage Guide (with screenshots)](./docs/WEB_USAGE_GUIDE.md)

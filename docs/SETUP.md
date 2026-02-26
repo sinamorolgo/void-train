@@ -82,6 +82,8 @@ pnpm dev
 
 접속: `http://127.0.0.1:5173`
 
+실제 UI 캡처 기반 사용 예시는 [WEB_USAGE_GUIDE.md](./WEB_USAGE_GUIDE.md) 참고.
+
 ## 5) YAML 기반 런처 일원화 설정
 
 UI와 백엔드는 아래 파일을 단일 소스로 사용합니다.
