@@ -2,6 +2,9 @@ import axios from 'axios'
 
 import type {
   BaseTaskType,
+  CatalogDocument,
+  CatalogFormatResult,
+  CatalogValidationResult,
   LocalModel,
   MlflowRunItem,
   MlflowServeServer,
@@ -22,6 +25,22 @@ export const api = {
   getSchemas: async (): Promise<TaskSchema[]> => {
     const { data } = await client.get<{ items: TaskSchema[] }>('/config-schemas')
     return data.items
+  },
+  getCatalog: async (): Promise<CatalogDocument> => {
+    const { data } = await client.get<CatalogDocument>('/catalog')
+    return data
+  },
+  validateCatalog: async (content: string): Promise<CatalogValidationResult> => {
+    const { data } = await client.post<CatalogValidationResult>('/catalog/validate', { content })
+    return data
+  },
+  formatCatalog: async (content: string): Promise<CatalogFormatResult> => {
+    const { data } = await client.post<CatalogFormatResult>('/catalog/format', { content })
+    return data
+  },
+  saveCatalog: async (payload: { content: string; createBackup: boolean }): Promise<CatalogDocument> => {
+    const { data } = await client.post<CatalogDocument>('/catalog/save', payload)
+    return data
   },
   startRun: async (taskType: TaskType, values: Record<string, unknown>): Promise<RunItem> => {
     const { data } = await client.post<RunItem>('/runs/start', { taskType, values })

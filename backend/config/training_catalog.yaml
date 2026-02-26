@@ -1,85 +1,84 @@
 tasks:
-  - taskType: classification
-    enabled: true
-    title: Classification
-    description: "Image classification trainer"
-    baseTaskType: classification
-    runner:
-      startMethod: python_script
-      target: backend/trainers/train_classification.py
-      targetEnvVar: CLASSIFICATION_SCRIPT_PATH
-    mlflow:
-      metric: val_accuracy
-      mode: max
-      modelName: classification-best-model
-      artifactPath: model
-    fieldOrder:
-      - run_name
-      - dataset_root
-      - output_root
-      - checkpoint_dir
-      - tensorboard_dir
-      - epochs
-      - batch_size
-      - learning_rate
-      - num_workers
-      - seed
-      - gpu_ids
-      - use_amp
-      - force_cpu
-      - save_every
-      - model_name
-      - num_classes
-      - image_size
-      - steps_per_epoch
-      - mlflow_tracking_uri
-      - mlflow_experiment
-    fieldOverrides:
-      run_name:
-        default: clf-quick-run
-      model_name:
-        default: tiny-cnn
-
-  - taskType: segmentation
-    enabled: true
-    title: Segmentation
-    description: "Semantic segmentation trainer"
-    baseTaskType: segmentation
-    runner:
-      startMethod: python_script
-      target: backend/trainers/train_segmentation.py
-      targetEnvVar: SEGMENTATION_SCRIPT_PATH
-    mlflow:
-      metric: val_iou
-      mode: max
-      modelName: segmentation-best-model
-      artifactPath: model
-    fieldOrder:
-      - run_name
-      - dataset_root
-      - output_root
-      - checkpoint_dir
-      - tensorboard_dir
-      - epochs
-      - batch_size
-      - learning_rate
-      - num_workers
-      - seed
-      - gpu_ids
-      - use_amp
-      - force_cpu
-      - save_every
-      - encoder_name
-      - num_classes
-      - input_height
-      - input_width
-      - dice_weight
-      - ce_weight
-      - steps_per_epoch
-      - mlflow_tracking_uri
-      - mlflow_experiment
-    fieldOverrides:
-      run_name:
-        default: seg-quick-run
-      encoder_name:
-        default: tiny-unet-like
+- taskType: classification
+  enabled: true
+  title: Classification
+  description: Image classification trainer
+  baseTaskType: classification
+  runner:
+    startMethod: python_script
+    target: backend/trainers/train_classification.py
+    targetEnvVar: CLASSIFICATION_SCRIPT_PATH
+  mlflow:
+    metric: val_accuracy
+    mode: max
+    modelName: classification-best-model
+    artifactPath: model
+  fieldOrder:
+  - run_name
+  - dataset_root
+  - output_root
+  - checkpoint_dir
+  - tensorboard_dir
+  - epochs
+  - batch_size
+  - learning_rate
+  - num_workers
+  - seed
+  - gpu_ids
+  - use_amp
+  - force_cpu
+  - save_every
+  - model_name
+  - num_classes
+  - image_size
+  - steps_per_epoch
+  - mlflow_tracking_uri
+  - mlflow_experiment
+  fieldOverrides:
+    run_name:
+      default: clf-quick-run
+    model_name:
+      default: tiny-cnn
+- taskType: segmentation
+  enabled: true
+  title: Segmentation
+  description: Semantic segmentation trainer
+  baseTaskType: segmentation
+  runner:
+    startMethod: python_script
+    target: backend/trainers/train_segmentation.py
+    targetEnvVar: SEGMENTATION_SCRIPT_PATH
+  mlflow:
+    metric: val_iou
+    mode: max
+    modelName: segmentation-best-model
+    artifactPath: model
+  fieldOrder:
+  - run_name
+  - dataset_root
+  - output_root
+  - checkpoint_dir
+  - tensorboard_dir
+  - epochs
+  - batch_size
+  - learning_rate
+  - num_workers
+  - seed
+  - gpu_ids
+  - use_amp
+  - force_cpu
+  - save_every
+  - encoder_name
+  - num_classes
+  - input_height
+  - input_width
+  - dice_weight
+  - ce_weight
+  - steps_per_epoch
+  - mlflow_tracking_uri
+  - mlflow_experiment
+  fieldOverrides:
+    run_name:
+      default: seg-quick-run
+    encoder_name:
+      default: tiny-unet-like

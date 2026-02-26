@@ -95,3 +95,34 @@ export interface LocalModel {
   loadedAt: string
   numClasses: number
 }
+
+export interface CatalogTaskSummary {
+  taskType: string
+  title: string
+  baseTaskType: BaseTaskType
+  runnerTarget: string
+  runnerStartMethod: 'python_script' | 'python_module'
+  fieldOverrideCount: number
+  fieldOrderCount: number
+}
+
+export interface CatalogDocument {
+  path: string
+  exists: boolean
+  modifiedAt: string | null
+  content: string
+  taskCount: number
+  tasks: CatalogTaskSummary[]
+  saved?: boolean
+  backupPath?: string | null
+}
+
+export interface CatalogValidationResult {
+  valid: boolean
+  taskCount: number
+  tasks: CatalogTaskSummary[]
+}
+
+export interface CatalogFormatResult extends CatalogValidationResult {
+  content: string
+}

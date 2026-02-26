@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 from dataclasses import dataclass
 from functools import lru_cache
@@ -109,6 +110,33 @@ DEFAULT_CATALOG: dict[str, Any] = {
         },
     ]
 }
+
+
+def default_catalog_payload() -> dict[str, Any]:
+    return copy.deepcopy(DEFAULT_CATALOG)
+
+
+def render_catalog_yaml(payload: dict[str, Any]) -> str:
+    return yaml.safe_dump(payload, sort_keys=False, allow_unicode=True)
+
+
+def parse_catalog_yaml(content: str, *, source: str) -> dict[str, Any]:
+    loaded = yaml.safe_load(content) or {}
+    if not isinstance(loaded, dict):
+        raise ValueError(f"Invalid catalog format: {source}")
+    return loaded
+
+
+def read_catalog_payload(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return default_catalog_payload()
+    return parse_catalog_yaml(path.read_text(encoding="utf-8"), source=str(path))
+
+
+def read_catalog_text(path: Path) -> tuple[str, bool]:
+    if path.exists():
+        return path.read_text(encoding="utf-8"), True
+    return render_catalog_yaml(default_catalog_payload()), False
 
 
 def _to_str(value: Any, *, field_name: str) -> str:
@@ -263,15 +291,15 @@ def _parse_task(raw: dict[str, Any]) -> TaskDefinition:
     )
 
 
-def _read_catalog(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return DEFAULT_CATALOG
+def validate_catalog_payload(payload: dict[str, Any], *, source: str) -> TaskCatalog:
+    tasks_raw = payload.get("tasks", [])
+    if not isinstance(tasks_raw, list):
+        raise ValueError(f"Invalid catalog format. 'tasks' must be a list: {source}")
 
-    with path.open("r", encoding="utf-8") as stream:
-        loaded = yaml.safe_load(stream) or {}
-    if not isinstance(loaded, dict):
-        raise ValueError(f"Invalid catalog format: {path}")
-    return loaded
+    tasks = [_parse_task(item) for item in tasks_raw if isinstance(item, dict)]
+    if not tasks:
+        raise ValueError(f"No tasks configured in catalog: {source}")
+    return TaskCatalog(tasks)
 
 
 class TaskCatalogService:
@@ -279,15 +307,8 @@ class TaskCatalogService:
         self._catalog_path = catalog_path
 
     def load(self) -> TaskCatalog:
-        payload = _read_catalog(self._catalog_path)
-        tasks_raw = payload.get("tasks", [])
-        if not isinstance(tasks_raw, list):
-            raise ValueError(f"Invalid catalog format. 'tasks' must be a list: {self._catalog_path}")
-
-        tasks = [_parse_task(item) for item in tasks_raw if isinstance(item, dict)]
-        if not tasks:
-            raise ValueError(f"No tasks configured in catalog: {self._catalog_path}")
-        return TaskCatalog(tasks)
+        payload = read_catalog_payload(self._catalog_path)
+        return validate_catalog_payload(payload, source=str(self._catalog_path))
 
 
 @lru_cache(maxsize=1)
@@ -295,4 +316,3 @@ def get_task_catalog() -> TaskCatalog:
     settings = get_settings()
     service = TaskCatalogService(settings.training_catalog_path)
     return service.load()
-

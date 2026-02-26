@@ -41,7 +41,7 @@ export function LaunchPanel({
       subtitle={`YAML 카탈로그 기반 설정으로 학습 실행을 통합 관리합니다. (${runnerText})`}
       action={
         <button type="button" className="primary" onClick={onLaunch} disabled={isLaunching || !currentSchema}>
-          {isLaunching ? 'Launching...' : 'Start Training'}
+          {isLaunching ? 'Launching…' : 'Start Training'}
         </button>
       }
     >

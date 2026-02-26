@@ -18,6 +18,15 @@ class StopRunRequest(BaseModel):
     runId: str
 
 
+class ValidateCatalogRequest(BaseModel):
+    content: str = Field(min_length=1)
+
+
+class SaveCatalogRequest(BaseModel):
+    content: str = Field(min_length=1)
+    createBackup: bool = True
+
+
 class SelectBestRequest(BaseModel):
     taskType: TaskType
     metric: str | None = None

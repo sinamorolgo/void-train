@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, cast
 
@@ -13,14 +14,23 @@ from app.api.schemas import (
     PromoteFtpModelRequest,
     PublishFtpModelRequest,
     PredictRequest,
+    SaveCatalogRequest,
     SelectBestRequest,
     StartFtpServerRequest,
     StartMlflowServingRequest,
     StartRunRequest,
     StopFtpServerRequest,
     StopMlflowServingRequest,
+    ValidateCatalogRequest,
 )
-from app.core.task_catalog import TaskDefinition, get_task_catalog
+from app.core.task_catalog import (
+    TaskDefinition,
+    get_task_catalog,
+    parse_catalog_yaml,
+    read_catalog_text,
+    render_catalog_yaml,
+    validate_catalog_payload,
+)
 from app.core.settings import get_settings
 from app.core.train_config import TaskType, dataclass_schema, get_metric_for_task
 from app.services.ftp_model_registry import StageType, ftp_registry
@@ -105,6 +115,34 @@ def _build_task_schema(task: TaskDefinition) -> dict[str, Any]:
     }
 
 
+def _task_summary(task: TaskDefinition) -> dict[str, Any]:
+    return {
+        "taskType": task.task_type,
+        "title": task.title,
+        "baseTaskType": task.base_task_type,
+        "runnerTarget": task.runner.target,
+        "runnerStartMethod": task.runner.start_method,
+        "fieldOverrideCount": len(task.field_overrides),
+        "fieldOrderCount": len(task.field_order),
+    }
+
+
+def _catalog_payload_response(*, content: str, exists: bool, source_path: Path) -> dict[str, Any]:
+    parsed = parse_catalog_yaml(content, source=str(source_path))
+    catalog = validate_catalog_payload(parsed, source=str(source_path))
+    modified_at: str | None = None
+    if exists:
+        modified_at = datetime.fromtimestamp(source_path.stat().st_mtime, tz=timezone.utc).isoformat()
+    return {
+        "path": str(source_path),
+        "exists": exists,
+        "modifiedAt": modified_at,
+        "content": content,
+        "taskCount": len(catalog.list_tasks()),
+        "tasks": [_task_summary(task) for task in catalog.list_tasks()],
+    }
+
+
 @router.get("/health")
 def health() -> dict[str, Any]:
     return {
@@ -120,6 +158,75 @@ def config_schemas() -> dict[str, Any]:
     def _run() -> dict[str, Any]:
         catalog = get_task_catalog()
         return {"items": [_build_task_schema(task) for task in catalog.list_tasks()]}
+
+    return _as_bad_request(_run)
+
+
+@router.get("/catalog")
+def get_catalog() -> dict[str, Any]:
+    def _run() -> dict[str, Any]:
+        content, exists = read_catalog_text(settings.training_catalog_path)
+        return _catalog_payload_response(content=content, exists=exists, source_path=settings.training_catalog_path)
+
+    return _as_bad_request(_run)
+
+
+@router.post("/catalog/validate")
+def validate_catalog(payload: ValidateCatalogRequest) -> dict[str, Any]:
+    def _run() -> dict[str, Any]:
+        parsed = parse_catalog_yaml(payload.content, source="request.body.content")
+        catalog = validate_catalog_payload(parsed, source="request.body.content")
+        return {
+            "valid": True,
+            "taskCount": len(catalog.list_tasks()),
+            "tasks": [_task_summary(task) for task in catalog.list_tasks()],
+        }
+
+    return _as_bad_request(_run)
+
+
+@router.post("/catalog/format")
+def format_catalog(payload: ValidateCatalogRequest) -> dict[str, Any]:
+    def _run() -> dict[str, Any]:
+        parsed = parse_catalog_yaml(payload.content, source="request.body.content")
+        catalog = validate_catalog_payload(parsed, source="request.body.content")
+        return {
+            "valid": True,
+            "taskCount": len(catalog.list_tasks()),
+            "tasks": [_task_summary(task) for task in catalog.list_tasks()],
+            "content": render_catalog_yaml(parsed),
+        }
+
+    return _as_bad_request(_run)
+
+
+@router.post("/catalog/save")
+def save_catalog(payload: SaveCatalogRequest) -> dict[str, Any]:
+    def _run() -> dict[str, Any]:
+        source_path = settings.training_catalog_path
+        parsed = parse_catalog_yaml(payload.content, source="request.body.content")
+        catalog = validate_catalog_payload(parsed, source="request.body.content")
+
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        backup_path: Path | None = None
+        if payload.createBackup and source_path.exists():
+            backup_stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            backup_path = source_path.with_suffix(f".{backup_stamp}.bak.yaml")
+            backup_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+        source_path.write_text(render_catalog_yaml(parsed), encoding="utf-8")
+        get_task_catalog.cache_clear()
+        get_task_catalog()
+
+        response = _catalog_payload_response(
+            content=source_path.read_text(encoding="utf-8"),
+            exists=True,
+            source_path=source_path,
+        )
+        response["saved"] = True
+        response["backupPath"] = str(backup_path) if backup_path else None
+        response["taskCount"] = len(catalog.list_tasks())
+        return response
 
     return _as_bad_request(_run)
 
