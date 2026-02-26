@@ -41,6 +41,12 @@
 - 미저장 상태에서 tab 이동 시 confirm 노출
 - 취소 시 현재 탭 유지, 승인 시 이동 동작 확인
 
+4. `extraFields` 고급 편집 동선 추가
+
+- 배경: 외부 `train.py` 인자를 YAML에서 관리하려면 고급 JSON 편집이 필요
+- 개선: `Advanced Fields`에 `extraFields (JSON array)` 편집 영역 추가
+- 결과: `name/valueType/required/default/choices/cliArg`를 코드 수정 없이 UI에서 관리 가능
+
 ## After
 
 ![YAML Studio After (Top)](./assets/studio-ux/studio-after-top.png)
@@ -52,6 +58,7 @@
 - 원하는 task로 이동 시간이 단축
 - Registry 핵심 값 확인성 개선
 - `fieldOverrides` 편집 시 저장 가능 조건이 예측 가능해짐
+- `extraFields` 편집도 동일한 저장 조건(파싱/반영 일치)으로 일관화됨
 - 탭 이동 시 변경 유실 위험이 낮아짐
 
 ## 다음 리스크 점검 포인트

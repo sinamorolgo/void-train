@@ -77,6 +77,8 @@
 - [x] `taskType` 중복 입력 시 즉시 Validation 경고 + Save 비활성화
 - [x] `fieldOverrides` JSON 편집 중 parse/mismatch 경고 및 저장 차단
 - [x] `fieldOverrides`를 valid JSON으로 blur 반영 시 경고 해제 + Save 가능
+- [x] `extraFields` JSON 편집 중 parse/mismatch 경고 및 저장 차단
+- [x] `extraFields`를 valid JSON으로 blur 반영 시 경고 해제 + Save 가능
 - [x] 미저장 상태에서 탭 이동 시 confirm 다이얼로그 표시(취소/승인 모두 확인)
 - [x] `Reset Draft` 후 `In Sync` 복귀
 
@@ -92,6 +94,27 @@
 - 기존: 문자열 포맷(pretty vs minified)만 달라도 mismatch로 판단
 - 수정: JSON 파싱 후 semantic 비교로 변경, blur 시 canonical pretty JSON으로 정규화
 
-## 5) 결론
+3. `extraFields` 편집/저장 동선 추가
+
+- `Advanced Fields`에 `extraFields (JSON array)` 입력 영역 추가
+- 파싱 오류/미반영 draft가 있으면 저장 차단
+- blur 시 canonical pretty JSON으로 정규화
+
+## 5) 외부 `train.py` + YAML 동적 인자 검증 (2026-02-26)
+
+검증 항목:
+
+- [x] `runner.target`에 외부 절대 경로 스크립트 지정 시 API 스키마 반영
+- [x] `extraFields` 정의가 `/api/config-schemas` 필드에 노출
+- [x] 런 시작 시 `extraFields` 값이 CLI 인자로 직렬화됨
+- [x] 필수 `extraFields` 누락 시 서버에서 400 에러 처리
+
+근거 테스트:
+
+- `backend/tests/test_run_manager.py`
+- `backend/tests/test_task_catalog.py`
+- `backend/tests/test_catalog_studio_routes.py`
+
+## 6) 결론
 
 요청하신 핵심 시나리오(학습 실행/모니터링, MLflow 전환, best 모델 선택, 다운로드, 로컬 및 MLflow 서빙)는 실제 실행으로 검증 완료했습니다.

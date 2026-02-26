@@ -18,7 +18,7 @@
 - `backend/tests/test_task_catalog.py::test_duplicate_task_type_raises`
 - `backend/tests/test_catalog_studio_routes.py::test_save_catalog_studio_rejects_duplicate_task_type`
 
-## Risk 2. `fieldOverrides` JSON 편집 중 저장 누락
+## Risk 2. `fieldOverrides` / `extraFields` JSON 편집 중 저장 누락
 
 설명:
 
@@ -26,7 +26,7 @@
 
 조치:
 
-- UI에서 `fieldOverrides` 파싱 오류 개수 표시
+- UI에서 `fieldOverrides`/`extraFields` 파싱 오류 개수 표시
 - 미반영 draft(편집 텍스트와 적용값 불일치) 존재 시 저장 버튼 비활성화
 - blur 시 valid JSON을 canonical pretty JSON으로 정규화해 사용자가 반영 상태를 즉시 확인 가능하게 개선
 - draft mismatch 판정을 문자열 비교가 아닌 JSON semantic 비교로 변경
@@ -63,5 +63,5 @@
 ## 운영 가이드
 
 1. 저장 전 상단 배지에서 `Validation: Ready` 확인
-2. `fieldOverrides` 경고가 있으면 먼저 해소
+2. `fieldOverrides` 또는 `extraFields` 경고가 있으면 먼저 해소
 3. `Save 전에 백업 파일 생성` 옵션은 기본 활성 상태 유지 권장

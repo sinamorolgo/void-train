@@ -5,14 +5,17 @@
 - `config/training_catalog.yaml`
   - UI + backend 공용 task 카탈로그 단일 소스
   - task별 시작 방법, args/UI 필드 구성, MLflow 기본값 관리
+  - 외부 `train.py` 경로(`runner.target`)와 동적 인자(`extraFields`) 정의
 - `app/core/task_catalog.py`
   - YAML 카탈로그 로드/검증
   - task 정의를 API 스키마/런타임 실행 설정으로 변환
+  - `extraFields`(valueType/required/default/choices/cliArg) 검증/정규화
 - `app/core/train_config.py`
   - task별 dataclass 템플릿/타입 검증
-  - CLI arg 변환/파싱 기본 기능
+  - 기본 CLI arg 변환/파싱 기능
 - `app/services/run_manager.py`
   - YAML 카탈로그 기준 subprocess 실행
+  - 기본 dataclass 인자 + YAML `extraFields` 인자 직렬화/검증 후 실행
   - stdout의 `VTM_PROGRESS::` / `VTM_RUN_META::` 파싱
   - 실행 상태/로그/진행률 추적
 - `app/services/mlflow_service.py`
@@ -39,7 +42,11 @@
   - React Query 기반 orchestration
   - API polling / mutation / notice 관리
 - `src/components/LaunchPanel.tsx`
-  - task 전환 + dataclass 스키마 기반 동적 폼
+  - task 전환 + `/api/config-schemas` 기반 동적 폼
+  - YAML `extraFields`도 동일 렌더 파이프라인으로 자동 노출
+- `src/components/CatalogStudioPanel.tsx`
+  - YAML Easy Mode 편집기
+  - `fieldOverrides` + `extraFields` JSON 편집/검증/저장
 - `src/components/RunsPanel.tsx`
   - 런 진행률/로그/중지
 - `src/components/MlflowPanel.tsx`
@@ -60,9 +67,12 @@
 - 진행률 stdout 이벤트 출력 (`VTM_PROGRESS::...`)
 - run meta 출력 (`VTM_RUN_META::...`)
 
+참고: 실제 운영에서는 위 샘플 스크립트 대신 외부 프로젝트의 `train.py`를
+`training_catalog.yaml`의 `runner.target`으로 직접 연결해 사용 가능합니다.
+
 ## Why this structure
 
 - YAML 카탈로그 하나로 `학습 시작 방식`, `웹 폼`, `런타임 기본값`을 일원화
-- dataclass는 타입 안정성을 위한 템플릿으로 유지하고, UI/실행 정책은 YAML에서 관리
+- dataclass는 기본 타입 템플릿으로 유지하고, UI/실행 정책 + 추가 인자는 YAML에서 관리
 - MLflow를 중심으로 하되 TensorBoard existing workflow를 끊지 않고 점진 전환 가능
 - 모델 서빙은 MLflow 우선 + 운영 fallback(FTP/Local)까지 확보

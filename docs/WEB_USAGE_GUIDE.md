@@ -46,7 +46,35 @@ tasks:
         choices: [quick, full]
 ```
 
-## 3) Model Registry Browser (모델별 stage/version 조회 + 다운로드)
+## 3) YAML Studio (Easy Mode)
+
+YAML 전체를 직접 수정하지 않아도 task/registry를 폼으로 편집할 수 있습니다.
+
+- 기본 필드: `taskType`, `runnerTarget`, `mlflowModelName` 등
+- 고급 필드: `fieldOverrides (JSON object)`, `extraFields (JSON array)`
+- 저장 조건: validation 통과 + JSON 파싱 오류 없음 + 편집값 반영 완료
+
+외부 `train.py` 인자를 추가하려면 `extraFields`에 아래와 같이 작성합니다.
+
+```json
+[
+  {
+    "name": "task_name",
+    "valueType": "str",
+    "required": true,
+    "default": "classification"
+  },
+  {
+    "name": "profile",
+    "valueType": "str",
+    "type": "select",
+    "default": "quick",
+    "choices": ["quick", "full"]
+  }
+]
+```
+
+## 4) Model Registry Browser (모델별 stage/version 조회 + 다운로드)
 
 `Model Serving` 하단에서 `registryModels` 기준 모델 목록을 보고 다운로드합니다.
 
@@ -60,7 +88,7 @@ tasks:
 4. `Artifact` 선택 (`bundle.tar.gz`, `manifest.json`, `model-standard.pt`)
 5. `Destination` 지정 후 `Download Selected Artifact`
 
-## 4) 모델 추가/수정 (YAML 단일 관리)
+## 5) 모델 추가/수정 (YAML 단일 관리)
 
 `backend/config/training_catalog.yaml`의 `registryModels`를 수정하면 웹 목록에 바로 반영됩니다.
 
