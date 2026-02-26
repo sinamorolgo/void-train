@@ -125,6 +125,8 @@ export function CatalogStudioPanel({
 }: CatalogStudioPanelProps) {
   const [overridesTextByIndex, setOverridesTextByIndex] = useState<Record<number, string>>({})
   const [overrideErrors, setOverrideErrors] = useState<Record<number, string>>({})
+  const [taskFilter, setTaskFilter] = useState('')
+  const [expandedTaskIndexes, setExpandedTaskIndexes] = useState<Record<number, boolean>>({ 0: true })
 
   const validationIssues = useMemo(() => {
     const issues: string[] = []
@@ -162,6 +164,21 @@ export function CatalogStudioPanel({
   }, [registryModels, tasks])
 
   const canSave = validationIssues.length === 0 && !isSaving && !isLoading && tasks.length > 0
+  const filteredTaskEntries = useMemo(
+    () =>
+      tasks
+        .map((task, index) => ({ task, index }))
+        .filter(({ task }) => {
+          const keyword = taskFilter.trim().toLowerCase()
+          if (!keyword) return true
+          return (
+            task.taskType.toLowerCase().includes(keyword) ||
+            task.title.toLowerCase().includes(keyword) ||
+            task.baseTaskType.toLowerCase().includes(keyword)
+          )
+        }),
+    [taskFilter, tasks],
+  )
 
   const updateTask = (index: number, patch: Partial<CatalogStudioTask>) => {
     const next = tasks.map((task, taskIndex) => (taskIndex === index ? { ...task, ...patch } : task))
@@ -194,7 +211,7 @@ export function CatalogStudioPanel({
       <section className="studio-summary-grid">
         <article>
           <span>Catalog Path</span>
-          <strong>{catalogPath}</strong>
+          <strong className="studio-path">{catalogPath}</strong>
         </article>
         <article>
           <span>Last Modified</span>
@@ -251,17 +268,55 @@ export function CatalogStudioPanel({
             <button type="button" onClick={() => onTasksChange([...tasks, defaultTask('segmentation')])}>
               + Segmentation
             </button>
+            <button
+              type="button"
+              onClick={() =>
+                setExpandedTaskIndexes(
+                  Object.fromEntries(tasks.map((_, index) => [index, true])) as Record<number, boolean>,
+                )
+              }
+            >
+              Expand All
+            </button>
+            <button type="button" onClick={() => setExpandedTaskIndexes({})}>
+              Collapse All
+            </button>
           </div>
         </header>
+        <div className="studio-filter-row">
+          <label htmlFor="studio-task-filter">Filter tasks</label>
+          <input
+            id="studio-task-filter"
+            type="text"
+            autoComplete="off"
+            value={taskFilter}
+            placeholder="taskType / title"
+            onChange={(event) => setTaskFilter(event.target.value)}
+          />
+          <span className="muted">
+            Showing {filteredTaskEntries.length}/{tasks.length}
+          </span>
+        </div>
         {tasks.length === 0 ? <p className="empty">최소 1개 이상의 task가 필요합니다.</p> : null}
         <div className="studio-list">
-          {tasks.map((task, index) => (
-            <article key={`${task.taskType}-${index}`} className="studio-card">
+          {filteredTaskEntries.map(({ task, index }) => (
+            <article key={`${task.taskType}-${index}`} className={`studio-card ${expandedTaskIndexes[index] ? 'expanded' : 'collapsed'}`}>
               <div className="studio-card-head">
                 <strong>
                   Task #{index + 1} · {task.taskType || 'new-task'}
                 </strong>
                 <div className="catalog-builder-actions">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedTaskIndexes((prev) => ({
+                        ...prev,
+                        [index]: !(prev[index] ?? index === 0),
+                      }))
+                    }
+                  >
+                    {(expandedTaskIndexes[index] ?? index === 0) ? 'Collapse' : 'Expand'}
+                  </button>
                   <button type="button" onClick={() => onTasksChange([...tasks, { ...task, taskType: `${task.taskType}-copy` }])}>
                     Duplicate
                   </button>
@@ -270,8 +325,9 @@ export function CatalogStudioPanel({
                   </button>
                 </div>
               </div>
-
-              <div className="compact-fields">
+              {expandedTaskIndexes[index] ?? index === 0 ? (
+                <>
+                  <div className="compact-fields">
                 <label>
                   taskType
                   <input value={task.taskType} onChange={(event) => updateTask(index, { taskType: event.target.value })} />
@@ -347,60 +403,66 @@ export function CatalogStudioPanel({
                     onChange={(event) => updateTask(index, { mlflowArtifactPath: event.target.value })}
                   />
                 </label>
-              </div>
+                  </div>
 
-              <details className="studio-advanced">
-                <summary>Advanced Fields</summary>
-                <div className="compact-fields">
-                  <label>
-                    fieldOrder (comma-separated)
-                    <textarea
-                      rows={3}
-                      value={task.fieldOrder.join(', ')}
-                      onChange={(event) => updateTask(index, { fieldOrder: splitCsv(event.target.value) })}
-                    />
-                  </label>
-                  <label>
-                    hiddenFields (comma-separated)
-                    <textarea
-                      rows={3}
-                      value={task.hiddenFields.join(', ')}
-                      onChange={(event) => updateTask(index, { hiddenFields: splitCsv(event.target.value) })}
-                    />
-                  </label>
-                  <label className="studio-overrides">
-                    fieldOverrides (JSON object)
-                    <textarea
-                      rows={6}
-                      value={overridesTextByIndex[index] ?? JSON.stringify(task.fieldOverrides, null, 2)}
-                      onChange={(event) =>
-                        setOverridesTextByIndex((prev) => ({
-                          ...prev,
-                          [index]: event.target.value,
-                        }))
-                      }
-                      onBlur={(event) => {
-                        try {
-                          const parsed = JSON.parse(event.target.value || '{}') as unknown
-                          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-                            throw new Error('fieldOverrides must be a JSON object')
+                  <details className="studio-advanced">
+                    <summary>Advanced Fields</summary>
+                    <div className="compact-fields">
+                      <label>
+                        fieldOrder (comma-separated)
+                        <textarea
+                          rows={3}
+                          value={task.fieldOrder.join(', ')}
+                          onChange={(event) => updateTask(index, { fieldOrder: splitCsv(event.target.value) })}
+                        />
+                      </label>
+                      <label>
+                        hiddenFields (comma-separated)
+                        <textarea
+                          rows={3}
+                          value={task.hiddenFields.join(', ')}
+                          onChange={(event) => updateTask(index, { hiddenFields: splitCsv(event.target.value) })}
+                        />
+                      </label>
+                      <label className="studio-overrides">
+                        fieldOverrides (JSON object)
+                        <textarea
+                          rows={6}
+                          value={overridesTextByIndex[index] ?? JSON.stringify(task.fieldOverrides, null, 2)}
+                          onChange={(event) =>
+                            setOverridesTextByIndex((prev) => ({
+                              ...prev,
+                              [index]: event.target.value,
+                            }))
                           }
-                          updateTask(index, { fieldOverrides: parsed as Record<string, Record<string, unknown>> })
-                          setOverrideErrors((prev) => {
-                            const next = { ...prev }
-                            delete next[index]
-                            return next
-                          })
-                        } catch (error) {
-                          const detail = error instanceof Error ? error.message : 'JSON parse error'
-                          setOverrideErrors((prev) => ({ ...prev, [index]: detail }))
-                        }
-                      }}
-                    />
-                    {overrideErrors[index] ? <small className="catalog-error-inline">{overrideErrors[index]}</small> : null}
-                  </label>
-                </div>
-              </details>
+                          onBlur={(event) => {
+                            try {
+                              const parsed = JSON.parse(event.target.value || '{}') as unknown
+                              if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                                throw new Error('fieldOverrides must be a JSON object')
+                              }
+                              updateTask(index, { fieldOverrides: parsed as Record<string, Record<string, unknown>> })
+                              setOverrideErrors((prev) => {
+                                const next = { ...prev }
+                                delete next[index]
+                                return next
+                              })
+                            } catch (error) {
+                              const detail = error instanceof Error ? error.message : 'JSON parse error'
+                              setOverrideErrors((prev) => ({ ...prev, [index]: detail }))
+                            }
+                          }}
+                        />
+                        {overrideErrors[index] ? <small className="catalog-error-inline">{overrideErrors[index]}</small> : null}
+                      </label>
+                    </div>
+                  </details>
+                </>
+              ) : (
+                <p className="muted">
+                  {task.title} · {task.baseTaskType} · {task.runnerStartMethod} · {task.runnerTarget}
+                </p>
+              )}
             </article>
           ))}
         </div>

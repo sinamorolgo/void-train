@@ -777,6 +777,10 @@ main {
   word-break: break-word;
 }
 
+.studio-path {
+  overflow-wrap: anywhere;
+}
+
 .studio-block {
   border: 1px solid rgba(93, 214, 191, 0.25);
   border-radius: 12px;
@@ -819,6 +823,10 @@ main {
   align-items: center;
   gap: 0.35rem;
   margin-bottom: 0.45rem;
+}
+
+.studio-card.collapsed {
+  background: rgba(0, 0, 0, 0.16);
 }
 
 .studio-advanced {
@@ -867,6 +875,38 @@ main {
 .studio-table input,
 .studio-table select {
   width: 100%;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(10, 13, 14, 0.75);
+  color: var(--text-100);
+  padding: 0.38rem 0.45rem;
+}
+
+.studio-table th:nth-child(4),
+.studio-table td:nth-child(4) {
+  min-width: 170px;
+}
+
+.studio-table th:nth-child(7),
+.studio-table td:nth-child(7) {
+  min-width: 220px;
+}
+
+.studio-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+
+.studio-filter-row label {
+  font-size: 0.82rem;
+  color: var(--text-300);
+}
+
+.studio-filter-row input {
+  width: min(260px, 100%);
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(10, 13, 14, 0.75);

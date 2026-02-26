@@ -76,3 +76,4 @@ pnpm dev
 - [FTP Model Registry](./docs/FTP_MODEL_REGISTRY.md)
 - [E2E Report](./docs/E2E-REPORT.md)
 - [Web Usage Guide (with screenshots)](./docs/WEB_USAGE_GUIDE.md)
+- [YAML Studio UX Analysis](./docs/UX_ANALYSIS_YAML_STUDIO.md)
