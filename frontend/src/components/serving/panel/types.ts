@@ -158,3 +158,11 @@ export interface LocalPredictFormState {
   alias: string
   inputJson: string
 }
+
+export type DownloadFromMlflowPayload = Parameters<ServingPanelProps['onDownloadFromMlflow']>[0]
+export type DownloadFromFtpPayload = Parameters<ServingPanelProps['onDownloadFromFtp']>[0]
+export type StartMlflowServingPayload = Parameters<ServingPanelProps['onStartMlflowServing']>[0]
+export type LoadLocalModelPayload = Parameters<ServingPanelProps['onLoadLocalModel']>[0]
+export type PublishFtpModelPayload = Parameters<ServingPanelProps['onPublishFtpModel']>[0]
+export type PublishBestFtpModelPayload = Parameters<ServingPanelProps['onPublishBestFtpModel']>[0]
+export type UploadLocalFtpModelPayload = Parameters<ServingPanelProps['onUploadLocalFtpModel']>[0]

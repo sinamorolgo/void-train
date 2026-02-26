@@ -23,6 +23,7 @@ interface ServingOperationsGridProps {
   uploadRegisterForm: UploadRegisterFormState
   localLoaderForm: LocalLoaderFormState
   localPredictForm: LocalPredictFormState
+  predictInputError: string | null
   onPatchRegisterLocalForm: (patch: Partial<RegisterLocalFormState>) => void
   onPatchPublishBestForm: (patch: Partial<PublishBestFormState>) => void
   onPatchUploadRegisterForm: (patch: Partial<UploadRegisterFormState>) => void
@@ -53,6 +54,7 @@ export function ServingOperationsGrid({
   uploadRegisterForm,
   localLoaderForm,
   localPredictForm,
+  predictInputError,
   onPatchRegisterLocalForm,
   onPatchPublishBestForm,
   onPatchUploadRegisterForm,
@@ -162,6 +164,7 @@ export function ServingOperationsGrid({
         alias={localPredictForm.alias}
         inputJson={localPredictForm.inputJson}
         busy={busy}
+        errorMessage={predictInputError}
         onAliasChange={(value) => onPatchLocalPredictForm({ alias: value })}
         onInputJsonChange={(value) => onPatchLocalPredictForm({ inputJson: value })}
         onPredict={onPredictLocalModel}

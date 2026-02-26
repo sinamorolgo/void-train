@@ -2,6 +2,7 @@ interface LocalPredictCardProps {
   alias: string
   inputJson: string
   busy: boolean
+  errorMessage?: string | null
   onAliasChange: (value: string) => void
   onInputJsonChange: (value: string) => void
   onPredict: () => void
@@ -11,6 +12,7 @@ export function LocalPredictCard({
   alias,
   inputJson,
   busy,
+  errorMessage,
   onAliasChange,
   onInputJsonChange,
   onPredict,
@@ -39,6 +41,7 @@ export function LocalPredictCard({
           />
         </label>
       </div>
+      {errorMessage ? <p className="muted">Invalid JSON: {errorMessage}</p> : null}
       <button type="button" disabled={busy || !alias} onClick={onPredict}>
         Run Predict
       </button>

@@ -1,7 +1,19 @@
+import { useState } from 'react'
+
 import { SectionCard } from './SectionCard'
 import { ServingDownloadsGrid } from './serving/panel/ServingDownloadsGrid'
 import { ServingOperationsGrid } from './serving/panel/ServingOperationsGrid'
-import type { ServingPanelProps } from './serving/panel/types'
+import {
+  buildFtpDownloadPayload,
+  buildLoadLocalPayload,
+  buildMlflowDownloadPayload,
+  buildMlflowServePayload,
+  buildPublishBestPayload,
+  buildRegisterLocalPayload,
+  buildUploadLocalPayload,
+  safeParseJsonInput,
+} from './serving/panel/servingPayloads'
+import type { LocalPredictFormState, ServingPanelProps } from './serving/panel/types'
 import { useServingPanelState } from './serving/panel/useServingPanelState'
 
 export function ServingPanel({
@@ -21,6 +33,7 @@ export function ServingPanel({
   onDownloadRegistryModel,
   onPredict,
 }: ServingPanelProps) {
+  const [predictInputError, setPredictInputError] = useState<string | null>(null)
   const {
     destinationDir,
     setDestinationDir,
@@ -45,95 +58,51 @@ export function ServingPanel({
   } = useServingPanelState()
 
   const handleMlflowDownload = () => {
-    onDownloadFromMlflow({
-      trackingUri: mlflowDownloadForm.trackingUri,
-      runId: mlflowDownloadForm.runId,
-      artifactPath: mlflowDownloadForm.artifactPath,
-      destinationDir,
-    })
+    onDownloadFromMlflow(buildMlflowDownloadPayload(mlflowDownloadForm, destinationDir))
   }
 
   const handleFtpDownload = () => {
-    onDownloadFromFtp({
-      host: ftpDownloadForm.host,
-      port: ftpDownloadForm.port,
-      username: ftpDownloadForm.username,
-      password: ftpDownloadForm.password,
-      remotePath: ftpDownloadForm.remotePath,
-      destinationDir,
-    })
+    onDownloadFromFtp(buildFtpDownloadPayload(ftpDownloadForm, destinationDir))
   }
 
   const handleMlflowServeStart = () => {
-    onStartMlflowServing({
-      modelUri: mlflowServeForm.modelUri,
-      host: mlflowServeForm.host,
-      port: mlflowServeForm.port,
-    })
+    onStartMlflowServing(buildMlflowServePayload(mlflowServeForm))
   }
 
   const handleBestPublish = () => {
-    onPublishBestFtpModel({
-      taskType: publishBestForm.taskType,
-      stage: publishBestForm.stage,
-      trackingUri: publishBestForm.trackingUri || undefined,
-      experimentName: publishBestForm.experimentName || undefined,
-      metric: publishBestForm.metric || undefined,
-      mode: publishBestForm.mode,
-      modelName: publishBestForm.modelName || undefined,
-      artifactPath: publishBestForm.artifactPath || undefined,
-      version: publishBestForm.version || undefined,
-      setLatest: true,
-      notes: publishBestForm.notes || undefined,
-      convertToTorchStandard: publishBestForm.convertToTorchStandard,
-      torchTaskType: publishBestForm.torchTaskType,
-      torchNumClasses: publishBestForm.torchNumClasses,
-    })
+    onPublishBestFtpModel(buildPublishBestPayload(publishBestForm))
   }
 
   const handleRegisterPytorch = () => {
-    onPublishFtpModel({
-      modelName: registerLocalForm.modelName,
-      stage: registerLocalForm.stage,
-      sourceType: 'local',
-      localPath: registerLocalForm.localPath,
-      version: registerLocalForm.version || undefined,
-      setLatest: true,
-      notes: registerLocalForm.notes || undefined,
-      convertToTorchStandard: registerLocalForm.convertToTorchStandard,
-      torchTaskType: registerLocalForm.taskType,
-      torchNumClasses: registerLocalForm.numClasses,
-    })
+    onPublishFtpModel(buildRegisterLocalPayload(registerLocalForm))
   }
 
   const handleUploadPytorch = () => {
-    if (!uploadRegisterForm.file) return
-    onUploadLocalFtpModel({
-      file: uploadRegisterForm.file,
-      modelName: uploadRegisterForm.modelName,
-      stage: uploadRegisterForm.stage,
-      version: uploadRegisterForm.version || undefined,
-      setLatest: true,
-      notes: uploadRegisterForm.notes || undefined,
-      convertToTorchStandard: uploadRegisterForm.convertToTorchStandard,
-      torchTaskType: uploadRegisterForm.taskType,
-      torchNumClasses: uploadRegisterForm.numClasses,
-    })
+    const payload = buildUploadLocalPayload(uploadRegisterForm)
+    if (!payload) return
+    onUploadLocalFtpModel(payload)
     clearUploadFile()
   }
 
   const handleLoadLocalModel = () => {
-    onLoadLocalModel({
-      alias: localLoaderForm.alias,
-      modelPath: localLoaderForm.modelPath,
-      taskType: localLoaderForm.taskType,
-      numClasses: localLoaderForm.numClasses,
-    })
+    onLoadLocalModel(buildLoadLocalPayload(localLoaderForm))
   }
 
   const handleLocalPredict = () => {
-    const parsed = JSON.parse(localPredictForm.inputJson)
-    onPredict(localPredictForm.alias, parsed)
+    const parsed = safeParseJsonInput(localPredictForm.inputJson)
+    if (!parsed.ok) {
+      setPredictInputError(parsed.error)
+      return
+    }
+    setPredictInputError(null)
+    onPredict(localPredictForm.alias, parsed.value)
+  }
+
+  const handlePatchLocalPredictForm = (patch: Partial<LocalPredictFormState>) => {
+    if (patch.inputJson !== undefined) {
+      setPredictInputError(null)
+    }
+    patchLocalPredictForm(patch)
   }
 
   return (
@@ -165,11 +134,12 @@ export function ServingPanel({
         uploadRegisterForm={uploadRegisterForm}
         localLoaderForm={localLoaderForm}
         localPredictForm={localPredictForm}
+        predictInputError={predictInputError}
         onPatchRegisterLocalForm={patchRegisterLocalForm}
         onPatchPublishBestForm={patchPublishBestForm}
         onPatchUploadRegisterForm={patchUploadRegisterForm}
         onPatchLocalLoaderForm={patchLocalLoaderForm}
-        onPatchLocalPredictForm={patchLocalPredictForm}
+        onPatchLocalPredictForm={handlePatchLocalPredictForm}
         onSetPublishBestTaskType={setPublishBestTaskType}
         onRegisterPytorch={handleRegisterPytorch}
         onPublishBest={handleBestPublish}
