@@ -4,14 +4,14 @@ import type {
   LoadLocalModelPayload,
   PublishBestFtpModelPayload,
   PublishFtpModelPayload,
-  StartMlflowServingPayload,
+  StartRayServingPayload,
   UploadLocalFtpModelPayload,
 } from './types'
 import type {
   FtpDownloadFormState,
   LocalLoaderFormState,
   MlflowDownloadFormState,
-  MlflowServeFormState,
+  RayServeFormState,
   PublishBestFormState,
   RegisterLocalFormState,
   UploadRegisterFormState,
@@ -40,11 +40,13 @@ export function buildFtpDownloadPayload(form: FtpDownloadFormState, destinationD
   }
 }
 
-export function buildMlflowServePayload(form: MlflowServeFormState): StartMlflowServingPayload {
+export function buildRayServePayload(form: RayServeFormState): StartRayServingPayload {
   return {
     modelUri: form.modelUri,
     host: form.host,
     port: form.port,
+    appName: form.appName || undefined,
+    routePrefix: form.routePrefix || undefined,
   }
 }
 

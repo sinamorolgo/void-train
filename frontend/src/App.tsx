@@ -135,9 +135,9 @@ export default function App() {
     refetchInterval: 30000,
   })
 
-  const mlflowServingQuery = useQuery({
-    queryKey: ['mlflow-serving'],
-    queryFn: api.listMlflowServing,
+  const rayServingQuery = useQuery({
+    queryKey: ['ray-serving'],
+    queryFn: api.listRayServing,
     refetchInterval: 3000,
   })
 
@@ -282,7 +282,7 @@ export default function App() {
     mutationFn: async (action: () => Promise<unknown>) => action(),
     onSuccess: (result) => {
       pushNotice('success', 'Serving action completed', JSON.stringify(result, null, 2))
-      queryClient.invalidateQueries({ queryKey: ['mlflow-serving'] })
+      queryClient.invalidateQueries({ queryKey: ['ray-serving'] })
       queryClient.invalidateQueries({ queryKey: ['local-models'] })
       queryClient.invalidateQueries({ queryKey: ['ftp-registry-catalog-models'] })
       queryClient.invalidateQueries({ queryKey: ['mlflow-experiments'] })
@@ -459,15 +459,15 @@ export default function App() {
 
             <ServingPanel
               localModels={localModelsQuery.data ?? []}
-              mlflowServers={mlflowServingQuery.data ?? []}
+              rayServers={rayServingQuery.data ?? []}
               mlflowExperiments={mlflowExperimentsQuery.data ?? []}
               registryModels={registryModelsQuery.data ?? []}
               busy={isBusy}
               onDownloadFromMlflow={(payload) => servingMutation.mutate(() => api.downloadModelFromMlflow(payload))}
               onDownloadFromFtp={(payload) => servingMutation.mutate(() => api.downloadModelFromFtp(payload))}
               onDownloadRegistryModel={(payload) => servingMutation.mutate(() => api.downloadRegistryModel(payload))}
-              onStartMlflowServing={(payload) => servingMutation.mutate(() => api.startMlflowServing(payload))}
-              onStopMlflowServing={(serverId) => servingMutation.mutate(() => api.stopMlflowServing(serverId))}
+              onStartRayServing={(payload) => servingMutation.mutate(() => api.startRayServing(payload))}
+              onStopRayServing={(serverId) => servingMutation.mutate(() => api.stopRayServing(serverId))}
               onLoadLocalModel={(payload) => servingMutation.mutate(() => api.loadLocalModel(payload))}
               onPublishFtpModel={(payload) => servingMutation.mutate(() => api.publishFtpModel(payload))}
               onPublishBestFtpModel={(payload) => servingMutation.mutate(() => api.publishBestFtpModel(payload))}

@@ -12,7 +12,7 @@ import type {
   LocalModel,
   MlflowExperimentItem,
   MlflowRunItem,
-  MlflowServeServer,
+  RayServeServer,
   RegistryArtifact,
   RegistryCatalogModel,
   RegistryStage,
@@ -222,20 +222,22 @@ export const api = {
     const { data } = await client.post('/ftp-registry/download', payload)
     return data
   },
-  startMlflowServing: async (payload: {
+  startRayServing: async (payload: {
     modelUri: string
     host: string
     port: number
-  }): Promise<MlflowServeServer> => {
-    const { data } = await client.post<MlflowServeServer>('/serving/mlflow/start', payload)
+    appName?: string
+    routePrefix?: string
+  }): Promise<RayServeServer> => {
+    const { data } = await client.post<RayServeServer>('/serving/ray/start', payload)
     return data
   },
-  stopMlflowServing: async (serverId: string): Promise<MlflowServeServer> => {
-    const { data } = await client.post<MlflowServeServer>('/serving/mlflow/stop', { serverId })
+  stopRayServing: async (serverId: string): Promise<RayServeServer> => {
+    const { data } = await client.post<RayServeServer>('/serving/ray/stop', { serverId })
     return data
   },
-  listMlflowServing: async (): Promise<MlflowServeServer[]> => {
-    const { data } = await client.get<{ items: MlflowServeServer[] }>('/serving/mlflow')
+  listRayServing: async (): Promise<RayServeServer[]> => {
+    const { data } = await client.get<{ items: RayServeServer[] }>('/serving/ray')
     return data.items
   },
   loadLocalModel: async (payload: {

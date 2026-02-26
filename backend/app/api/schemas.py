@@ -134,13 +134,15 @@ class MigrateTensorBoardRequest(BaseModel):
     runName: str = "tb-import"
 
 
-class StartMlflowServingRequest(BaseModel):
+class StartRayServingRequest(BaseModel):
     modelUri: str
     host: str = "0.0.0.0"
     port: int = 7001
+    appName: str = "void-train-manager"
+    routePrefix: str = "/"
 
 
-class StopMlflowServingRequest(BaseModel):
+class StopRayServingRequest(BaseModel):
     serverId: str
 
 

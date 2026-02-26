@@ -168,18 +168,3 @@ def download_artifact(
     target.mkdir(parents=True, exist_ok=True)
     downloaded = client.download_artifacts(run_id, artifact_path, str(target))
     return str(Path(downloaded).resolve())
-
-
-def build_mlflow_serve_command(model_uri: str, host: str, port: int) -> list[str]:
-    return [
-        "mlflow",
-        "models",
-        "serve",
-        "--model-uri",
-        model_uri,
-        "--host",
-        host,
-        "--port",
-        str(port),
-        "--no-conda",
-    ]

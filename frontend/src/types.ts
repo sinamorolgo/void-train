@@ -86,15 +86,18 @@ export interface MlflowExperimentItem {
   lifecycleStage: string
 }
 
-export interface MlflowServeServer {
+export interface RayServeServer {
   serverId: string
   modelUri: string
   host: string
   port: number
+  appName: string
+  routePrefix: string
   startedAt: string
   finishedAt: string | null
   status: string
   pid: number | null
+  lastError?: string | null
 }
 
 export interface LocalModel {

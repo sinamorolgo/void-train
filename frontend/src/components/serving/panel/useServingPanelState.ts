@@ -5,7 +5,7 @@ import type {
   LocalLoaderFormState,
   LocalPredictFormState,
   MlflowDownloadFormState,
-  MlflowServeFormState,
+  RayServeFormState,
   PublishBestFormState,
   RegisterLocalFormState,
   UploadRegisterFormState,
@@ -35,10 +35,12 @@ export function useServingPanelState() {
     remotePath: '',
   })
 
-  const [mlflowServeForm, setMlflowServeForm] = useState<MlflowServeFormState>({
+  const [rayServeForm, setRayServeForm] = useState<RayServeFormState>({
     modelUri: 'models:/classification-best-model/1',
     host: '0.0.0.0',
     port: 7001,
+    appName: 'void-train-manager',
+    routePrefix: '/',
   })
 
   const [localLoaderForm, setLocalLoaderForm] = useState<LocalLoaderFormState>({
@@ -97,8 +99,8 @@ export function useServingPanelState() {
   const patchFtpDownloadForm = (patch: Partial<FtpDownloadFormState>) => {
     setFtpDownloadForm((prev) => ({ ...prev, ...patch }))
   }
-  const patchMlflowServeForm = (patch: Partial<MlflowServeFormState>) => {
-    setMlflowServeForm((prev) => ({ ...prev, ...patch }))
+  const patchRayServeForm = (patch: Partial<RayServeFormState>) => {
+    setRayServeForm((prev) => ({ ...prev, ...patch }))
   }
   const patchLocalLoaderForm = (patch: Partial<LocalLoaderFormState>) => {
     setLocalLoaderForm((prev) => ({ ...prev, ...patch }))
@@ -136,7 +138,7 @@ export function useServingPanelState() {
     setDestinationDir,
     mlflowDownloadForm,
     ftpDownloadForm,
-    mlflowServeForm,
+    rayServeForm,
     localLoaderForm,
     registerLocalForm,
     publishBestForm,
@@ -144,7 +146,7 @@ export function useServingPanelState() {
     localPredictForm,
     patchMlflowDownloadForm,
     patchFtpDownloadForm,
-    patchMlflowServeForm,
+    patchRayServeForm,
     patchLocalLoaderForm,
     patchRegisterLocalForm,
     patchPublishBestForm,

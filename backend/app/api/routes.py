@@ -24,10 +24,10 @@ from app.api.schemas import (
     SaveCatalogStudioRequest,
     SelectBestRequest,
     StartFtpServerRequest,
-    StartMlflowServingRequest,
+    StartRayServingRequest,
     StartRunRequest,
     StopFtpServerRequest,
-    StopMlflowServingRequest,
+    StopRayServingRequest,
     ValidateCatalogRequest,
 )
 from app.core.catalog_repository import CatalogRevision, get_catalog_repository
@@ -674,28 +674,30 @@ def download_model(payload: dict[str, Any]) -> dict[str, Any]:
     return _as_bad_request(lambda: handler(payload))
 
 
-@router.post("/serving/mlflow/start")
-def start_mlflow_serving(payload: StartMlflowServingRequest) -> dict[str, Any]:
+@router.post("/serving/ray/start")
+def start_ray_serving(payload: StartRayServingRequest) -> dict[str, Any]:
     return _as_bad_request(
-        lambda: serving_manager.start_mlflow_server(
+        lambda: serving_manager.start_ray_server(
             model_uri=payload.modelUri,
             host=payload.host,
             port=payload.port,
+            app_name=payload.appName,
+            route_prefix=payload.routePrefix,
         )
     )
 
 
-@router.post("/serving/mlflow/stop")
-def stop_mlflow_serving(payload: StopMlflowServingRequest) -> dict[str, Any]:
+@router.post("/serving/ray/stop")
+def stop_ray_serving(payload: StopRayServingRequest) -> dict[str, Any]:
     try:
-        return serving_manager.stop_mlflow_server(payload.serverId)
+        return serving_manager.stop_ray_server(payload.serverId)
     except KeyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
 
-@router.get("/serving/mlflow")
-def list_mlflow_serving() -> dict[str, Any]:
-    return {"items": serving_manager.list_mlflow_servers()}
+@router.get("/serving/ray")
+def list_ray_serving() -> dict[str, Any]:
+    return {"items": serving_manager.list_ray_servers()}
 
 
 @router.post("/serving/local/load")
