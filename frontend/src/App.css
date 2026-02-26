@@ -1776,6 +1776,28 @@ textarea:focus-visible,
   box-shadow: inset 0 1px 1px rgba(15, 23, 42, 0.04);
 }
 
+.upload-drop-field {
+  border: 1px dashed rgba(15, 23, 42, 0.2);
+  border-radius: calc(var(--radius) - 4px);
+  padding: 0.42rem;
+  background: rgba(255, 255, 255, 0.52);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.upload-drop-field input[type='file'] {
+  cursor: pointer;
+}
+
+.upload-drop-field:focus-within,
+.upload-drop-field.is-drag-over {
+  border-color: rgba(10, 132, 255, 0.5);
+  background: rgba(10, 132, 255, 0.08);
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.14);
+}
+
 input::placeholder,
 textarea::placeholder {
   color: #94a3b8;

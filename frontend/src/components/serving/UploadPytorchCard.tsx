@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react'
 import type { BaseTaskType, RegistryStage } from '../../types'
 
 interface UploadPytorchCardProps {
@@ -21,6 +22,14 @@ interface UploadPytorchCardProps {
   onUpload: () => void
 }
 
+const ACCEPTED_UPLOAD_FILE_EXTENSIONS = ['.pth', '.pt', '.tar', '.gz', '.zip']
+const ACCEPTED_UPLOAD_FILE_VALUE = ACCEPTED_UPLOAD_FILE_EXTENSIONS.join(',')
+
+function isAcceptedUploadFile(file: File) {
+  const normalizedName = file.name.toLowerCase()
+  return ACCEPTED_UPLOAD_FILE_EXTENSIONS.some((extension) => normalizedName.endsWith(extension))
+}
+
 export function UploadPytorchCard({
   modelName,
   stage,
@@ -41,6 +50,17 @@ export function UploadPytorchCard({
   onFileChange,
   onUpload,
 }: UploadPytorchCardProps) {
+  const [dragOver, setDragOver] = useState(false)
+  const dragDepthRef = useRef(0)
+
+  const applyFile = (file: File | null) => {
+    if (!file) {
+      onFileChange(null)
+      return
+    }
+    onFileChange(isAcceptedUploadFile(file) ? file : null)
+  }
+
   return (
     <div className="mini-card">
       <h3>Upload .pth/.pt and Register</h3>
@@ -56,14 +76,37 @@ export function UploadPytorchCard({
             <option value="release">release</option>
           </select>
         </label>
-        <label>
+        <label
+          className={`upload-drop-field${dragOver ? ' is-drag-over' : ''}`}
+          onDragEnter={(event) => {
+            event.preventDefault()
+            dragDepthRef.current += 1
+            setDragOver(true)
+          }}
+          onDragOver={(event) => {
+            event.preventDefault()
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault()
+            dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+            if (dragDepthRef.current === 0) {
+              setDragOver(false)
+            }
+          }}
+          onDrop={(event) => {
+            event.preventDefault()
+            dragDepthRef.current = 0
+            setDragOver(false)
+            applyFile(event.dataTransfer.files?.[0] ?? null)
+          }}
+        >
           Upload File (.pth/.pt)
           <input
             type="file"
-            accept=".pth,.pt,.tar,.gz,.zip"
-            onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+            accept={ACCEPTED_UPLOAD_FILE_VALUE}
+            onChange={(event) => applyFile(event.target.files?.[0] ?? null)}
           />
-          <small className="muted">{fileName || '선택된 파일 없음'}</small>
+          <small className="muted">{fileName || '파일을 드래그하거나 클릭해 선택하세요'}</small>
         </label>
         <label>
           Version (optional)
