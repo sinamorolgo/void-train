@@ -128,6 +128,67 @@ class TaskCatalogTest(unittest.TestCase):
 
         self.assertIn("Duplicate taskType detected", str(context.exception))
 
+    def test_duplicate_registry_model_id_raises(self) -> None:
+        payload = {
+            "tasks": [
+                {
+                    "taskType": "classification",
+                    "title": "Classification",
+                    "baseTaskType": "classification",
+                    "runner": {"target": "backend/trainers/train_classification.py"},
+                }
+            ],
+            "registryModels": [
+                {
+                    "id": "clf-main",
+                    "title": "Classification A",
+                    "taskType": "classification",
+                    "modelName": "classification-best-model",
+                },
+                {
+                    "id": "CLF MAIN",
+                    "title": "Classification B",
+                    "taskType": "classification",
+                    "modelName": "classification-best-model-b",
+                },
+            ],
+        }
+
+        with self.assertRaises(ValueError) as context:
+            validate_catalog_payload(payload, source="test")
+
+        self.assertIn("Duplicate registry model id", str(context.exception))
+
+    def test_registry_models_derived_when_catalog_registry_empty(self) -> None:
+        payload = {
+            "tasks": [
+                {
+                    "taskType": "classification",
+                    "title": "Classification",
+                    "baseTaskType": "classification",
+                    "runner": {"target": "backend/trainers/train_classification.py"},
+                    "mlflow": {"modelName": "classification-best-model"},
+                },
+                {
+                    "taskType": "segmentation",
+                    "title": "Segmentation",
+                    "baseTaskType": "segmentation",
+                    "runner": {"target": "backend/trainers/train_segmentation.py"},
+                    "mlflow": {"modelName": "segmentation-best-model"},
+                },
+            ],
+            "registryModels": [],
+        }
+
+        catalog = validate_catalog_payload(payload, source="test")
+        registry_models = catalog.list_registry_models()
+
+        self.assertEqual(len(registry_models), 2)
+        self.assertEqual(registry_models[0].model_id, "classification")
+        self.assertEqual(registry_models[1].model_id, "segmentation")
+        self.assertEqual(registry_models[0].default_stage, "release")
+        self.assertEqual(registry_models[0].default_destination_dir, "./backend/artifacts/downloads")
+
 
 if __name__ == "__main__":
     unittest.main()

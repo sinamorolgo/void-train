@@ -419,45 +419,64 @@ def _derive_registry_models_from_tasks(tasks: list[TaskDefinition]) -> list[Regi
     return items
 
 
-def validate_catalog_payload(payload: dict[str, Any], *, source: str) -> TaskCatalog:
-    tasks_raw = payload.get("tasks", [])
+def _parse_task_definitions(tasks_raw: Any, *, source: str) -> list[TaskDefinition]:
     if not isinstance(tasks_raw, list):
         raise ValueError(f"Invalid catalog format. 'tasks' must be a list: {source}")
 
     tasks = [_parse_task(item) for item in tasks_raw if isinstance(item, dict)]
     if not tasks:
         raise ValueError(f"No tasks configured in catalog: {source}")
+    return tasks
 
-    seen_task_types: set[str] = set()
-    duplicated_task_types: set[str] = set()
-    for task in tasks:
-        if task.task_type in seen_task_types:
-            duplicated_task_types.add(task.task_type)
-        seen_task_types.add(task.task_type)
-    if duplicated_task_types:
-        duplicated = ", ".join(sorted(duplicated_task_types))
-        raise ValueError(f"Duplicate taskType detected in catalog: {duplicated}")
 
-    registry_raw = payload.get("registryModels")
-    registry_models: list[RegistryModelDefinition] = []
+def _find_duplicate_values(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    duplicated: set[str] = set()
+    for value in values:
+        if value in seen:
+            duplicated.add(value)
+        seen.add(value)
+    return sorted(duplicated)
 
+
+def _raise_if_duplicate_task_types(tasks: list[TaskDefinition]) -> None:
+    duplicated = _find_duplicate_values([task.task_type for task in tasks])
+    if duplicated:
+        raise ValueError(f"Duplicate taskType detected in catalog: {', '.join(duplicated)}")
+
+
+def _parse_registry_models(
+    registry_raw: Any,
+    *,
+    tasks: list[TaskDefinition],
+    source: str,
+) -> list[RegistryModelDefinition]:
     if registry_raw is None:
-        registry_models = _derive_registry_models_from_tasks(tasks)
-    else:
-        if not isinstance(registry_raw, list):
-            raise ValueError(f"Invalid catalog format. 'registryModels' must be a list: {source}")
-        seen_ids: set[str] = set()
-        for index, item in enumerate(registry_raw):
-            if not isinstance(item, dict):
-                raise ValueError(f"Invalid registry model at index={index}: expected object")
-            parsed = _parse_registry_model(item, fallback_id=f"model-{index + 1}", source=f"registryModels[{index}]")
-            if parsed.model_id in seen_ids:
-                raise ValueError(f"Duplicate registry model id: {parsed.model_id}")
-            seen_ids.add(parsed.model_id)
-            registry_models.append(parsed)
+        return _derive_registry_models_from_tasks(tasks)
 
-        if not registry_models:
-            registry_models = _derive_registry_models_from_tasks(tasks)
+    if not isinstance(registry_raw, list):
+        raise ValueError(f"Invalid catalog format. 'registryModels' must be a list: {source}")
+
+    registry_models: list[RegistryModelDefinition] = []
+    seen_ids: set[str] = set()
+    for index, item in enumerate(registry_raw):
+        if not isinstance(item, dict):
+            raise ValueError(f"Invalid registry model at index={index}: expected object")
+        parsed = _parse_registry_model(item, fallback_id=f"model-{index + 1}", source=f"registryModels[{index}]")
+        if parsed.model_id in seen_ids:
+            raise ValueError(f"Duplicate registry model id: {parsed.model_id}")
+        seen_ids.add(parsed.model_id)
+        registry_models.append(parsed)
+
+    if not registry_models:
+        return _derive_registry_models_from_tasks(tasks)
+    return registry_models
+
+
+def validate_catalog_payload(payload: dict[str, Any], *, source: str) -> TaskCatalog:
+    tasks = _parse_task_definitions(payload.get("tasks", []), source=source)
+    _raise_if_duplicate_task_types(tasks)
+    registry_models = _parse_registry_models(payload.get("registryModels"), tasks=tasks, source=source)
 
     return TaskCatalog(tasks, registry_models)
 
