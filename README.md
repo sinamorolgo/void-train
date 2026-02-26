@@ -7,6 +7,18 @@ PyTorch 학습(분류/세그)을 웹 UI로 실행하고 MLflow 중심으로 추�
 모델 배포는 UI의 `Model Serving` 섹션에서 `.pth/.pt`를 FTP 레지스트리에 등록하고,
 선택적으로 PyTorch 표준 아티팩트(`model-standard.pt`)로 변환 등록할 수 있습니다.
 
+## 최근 반영 사항
+
+- `backend/config/training_catalog.yaml` 단일 파일로 다음을 일원화:
+  - 분류/세그 학습 시작 방식(`python_script`/`python_module`)
+  - CLI 인자 정의(필수/기본값/검증/설명/UI 라벨)
+  - 웹 폼 렌더링 순서/그룹/도움말
+  - 런타임 기본값(로그/체크포인트/MLflow 연동)
+- UI `YAML Catalog` 탭에서 설정 파일을 조회/검증/저장 가능
+- `Model Serving`에서 `.pth/.pt` 업로드 + 표준 아티팩트 변환 등록 지원
+- 클라이언트는 `Dataclass` 기반 설정 + 싱글톤 패턴으로 FTP 모델 다운로드 경로를 관리
+- 학습/레지스트리 Stage를 `dev`/`release`로 분리 운영 가능
+
 ## 빠른 시작
 
 1. 백엔드 + MLflow 실행
@@ -59,3 +71,4 @@ pnpm dev
 - [Setup](./docs/SETUP.md)
 - [Architecture](./docs/ARCHITECTURE.md)
 - [FTP Model Registry](./docs/FTP_MODEL_REGISTRY.md)
+- [E2E Report](./docs/E2E-REPORT.md)
