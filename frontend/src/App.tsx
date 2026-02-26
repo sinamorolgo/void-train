@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import './App.css'
@@ -10,6 +10,7 @@ import { RunsPanel } from './components/RunsPanel'
 import { ServingPanel } from './components/ServingPanel'
 import { api, errorMessage } from './lib/api'
 import { buildDefaults } from './hooks/useSchemaDefaults'
+import { useWorkspaceTabs } from './hooks/useWorkspaceTabs'
 import type {
   CatalogStudioRegistryModel,
   CatalogStudioTask,
@@ -24,34 +25,15 @@ interface Notice {
   timestamp: number
 }
 
-type AppView = 'operations' | 'catalog' | 'studio'
-const TAB_QUERY_KEY = 'tab'
 type CatalogValidationState = 'idle' | 'valid' | 'invalid'
 interface CatalogStudioDraft {
   tasks: CatalogStudioTask[]
   registryModels: CatalogStudioRegistryModel[]
 }
 
-function parseViewFromUrl(): AppView {
-  const tab = new URLSearchParams(window.location.search).get(TAB_QUERY_KEY)
-  if (tab === 'studio') return 'studio'
-  return tab === 'catalog' ? 'catalog' : 'operations'
-}
-
-function syncViewToUrl(nextView: AppView): void {
-  const url = new URL(window.location.href)
-  if (nextView === 'operations') {
-    url.searchParams.delete(TAB_QUERY_KEY)
-  } else {
-    url.searchParams.set(TAB_QUERY_KEY, nextView)
-  }
-  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
-}
-
 export default function App() {
   const queryClient = useQueryClient()
   const [selectedTaskState, setSelectedTaskState] = useState<TaskType>('')
-  const [activeView, setActiveView] = useState<AppView>(() => parseViewFromUrl())
   const [formByTask, setFormByTask] = useState<Record<string, Record<string, unknown>>>({})
   const [catalogDraftOverride, setCatalogDraftOverride] = useState<string | null>(null)
   const [catalogBaselineOverride, setCatalogBaselineOverride] = useState<string | null>(null)
@@ -105,6 +87,10 @@ export default function App() {
     [studioBaselineOverride, catalogStudioQuery.data?.tasks, catalogStudioQuery.data?.registryModels],
   )
   const studioDirty = JSON.stringify(studioDraft) !== JSON.stringify(studioBaseline)
+  const { activeView, handleViewChange } = useWorkspaceTabs({
+    catalogDirty,
+    studioDirty,
+  })
 
   const defaultFormByTask = useMemo(() => {
     const map: Record<string, Record<string, unknown>> = {}
@@ -315,40 +301,6 @@ export default function App() {
     const finished = (runsQuery.data ?? []).filter((run) => run.status === 'completed').length
     return { running, finished }
   }, [runsQuery.data])
-
-  useEffect(() => {
-    syncViewToUrl(activeView)
-  }, [activeView])
-
-  useEffect(() => {
-    const handlePopState = () => {
-      setActiveView(parseViewFromUrl())
-    }
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
-
-  useEffect(() => {
-    if (!(catalogDirty || studioDirty)) return undefined
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ''
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [catalogDirty, studioDirty])
-
-  const handleViewChange = (nextView: AppView) => {
-    if (nextView === activeView) return
-    const hasUnsaved =
-      (activeView === 'catalog' && catalogDirty) ||
-      (activeView === 'studio' && studioDirty)
-    if (hasUnsaved) {
-      const shouldLeave = window.confirm('저장되지 않은 YAML 변경사항이 있습니다. 탭을 이동하시겠어요?')
-      if (!shouldLeave) return
-    }
-    setActiveView(nextView)
-  }
 
   return (
     <div className="app-shell">
