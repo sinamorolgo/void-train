@@ -12,7 +12,7 @@ import {
 } from './catalog-studio/catalogStudioUtils'
 import { SectionCard } from './SectionCard'
 
-interface CatalogStudioPanelProps {
+export interface CatalogStudioPanelProps {
   catalogPath: string
   modifiedAt: string | null
   tasks: CatalogStudioTask[]

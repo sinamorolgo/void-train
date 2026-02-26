@@ -34,7 +34,7 @@ import type {
 } from './catalog-manager/panel/types'
 import { SectionCard } from './SectionCard'
 
-interface CatalogManagerPanelProps {
+export interface CatalogManagerPanelProps {
   catalogPath: string
   catalogExists: boolean
   modifiedAt: string | null

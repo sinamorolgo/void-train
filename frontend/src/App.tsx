@@ -1,482 +1,65 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 
 import './App.css'
 import { AppHero } from './components/app-shell/AppHero'
-import { NoticeStack, type NoticeItem } from './components/app-shell/NoticeStack'
-import { WorkspaceTabs } from './components/app-shell/WorkspaceTabs'
-import { CatalogManagerPanel } from './components/CatalogManagerPanel'
-import { CatalogStudioPanel } from './components/CatalogStudioPanel'
-import { LaunchPanel } from './components/LaunchPanel'
-import { MlflowPanel } from './components/MlflowPanel'
-import { RunsPanel } from './components/RunsPanel'
-import { ServingPanel } from './components/ServingPanel'
-import { api, errorMessage } from './lib/api'
-import { buildDefaults } from './hooks/useSchemaDefaults'
+import { NoticeStack } from './components/app-shell/NoticeStack'
+import { WorkspaceSidebar } from './components/app-shell/WorkspaceSidebar'
+import { WorkspaceContent } from './components/workspace/WorkspaceContent'
+import { useCatalogWorkspace } from './hooks/useCatalogWorkspace'
+import { useNoticeCenter } from './hooks/useNoticeCenter'
+import { useOperationsWorkspace } from './hooks/useOperationsWorkspace'
 import { useWorkspaceTabs } from './hooks/useWorkspaceTabs'
-import type {
-  CatalogStudioRegistryModel,
-  CatalogStudioTask,
-  CatalogValidationResult,
-  TaskType,
-} from './types'
-
-type CatalogValidationState = 'idle' | 'valid' | 'invalid'
-interface CatalogStudioDraft {
-  tasks: CatalogStudioTask[]
-  registryModels: CatalogStudioRegistryModel[]
-}
 
 export default function App() {
   const queryClient = useQueryClient()
-  const [selectedTaskState, setSelectedTaskState] = useState<TaskType>('')
-  const [formByTask, setFormByTask] = useState<Record<string, Record<string, unknown>>>({})
-  const [catalogDraftOverride, setCatalogDraftOverride] = useState<string | null>(null)
-  const [catalogBaselineOverride, setCatalogBaselineOverride] = useState<string | null>(null)
-  const [createBackup, setCreateBackup] = useState(true)
-  const [catalogValidation, setCatalogValidation] = useState<CatalogValidationResult | null>(null)
-  const [catalogValidationError, setCatalogValidationError] = useState<string | null>(null)
-  const [catalogValidationState, setCatalogValidationState] = useState<CatalogValidationState>('idle')
-  const [catalogValidatedAt, setCatalogValidatedAt] = useState<string | null>(null)
-  const [studioDraftOverride, setStudioDraftOverride] = useState<CatalogStudioDraft | null>(null)
-  const [studioBaselineOverride, setStudioBaselineOverride] = useState<CatalogStudioDraft | null>(null)
-  const [studioCreateBackup, setStudioCreateBackup] = useState(true)
-  const [studioSaveError, setStudioSaveError] = useState<string | null>(null)
-  const [notices, setNotices] = useState<NoticeItem[]>([])
+  const { notices, pushNotice } = useNoticeCenter()
 
-  const pushNotice = (level: NoticeItem['level'], message: string, detail?: string) => {
-    setNotices((prev) => [{ level, message, detail, timestamp: Date.now() }, ...prev].slice(0, 6))
-  }
-
-  const schemasQuery = useQuery({ queryKey: ['schemas'], queryFn: api.getSchemas })
-  const catalogQuery = useQuery({
-    queryKey: ['catalog'],
-    queryFn: api.getCatalog,
-    refetchOnWindowFocus: false,
-  })
-  const catalogStudioQuery = useQuery({
-    queryKey: ['catalog-studio'],
-    queryFn: api.getCatalogStudio,
-    refetchOnWindowFocus: false,
+  const catalogWorkspace = useCatalogWorkspace({
+    queryClient,
+    pushNotice,
   })
 
-  const schemas = useMemo(() => schemasQuery.data ?? [], [schemasQuery.data])
-  const catalogDraft = catalogDraftOverride ?? catalogQuery.data?.content ?? ''
-  const catalogBaseline = catalogBaselineOverride ?? catalogQuery.data?.content ?? ''
-  const catalogTasks = catalogValidation?.tasks ?? catalogQuery.data?.tasks ?? []
-  const catalogTaskCount = catalogValidation?.taskCount ?? catalogQuery.data?.taskCount ?? null
-  const catalogDirty = catalogDraft !== catalogBaseline
-  const studioDraft = useMemo<CatalogStudioDraft>(
-    () =>
-      studioDraftOverride ?? {
-        tasks: catalogStudioQuery.data?.tasks ?? [],
-        registryModels: catalogStudioQuery.data?.registryModels ?? [],
-      },
-    [studioDraftOverride, catalogStudioQuery.data?.tasks, catalogStudioQuery.data?.registryModels],
-  )
-  const studioBaseline = useMemo<CatalogStudioDraft>(
-    () =>
-      studioBaselineOverride ?? {
-        tasks: catalogStudioQuery.data?.tasks ?? [],
-        registryModels: catalogStudioQuery.data?.registryModels ?? [],
-      },
-    [studioBaselineOverride, catalogStudioQuery.data?.tasks, catalogStudioQuery.data?.registryModels],
-  )
-  const studioDirty = JSON.stringify(studioDraft) !== JSON.stringify(studioBaseline)
+  const operationsWorkspace = useOperationsWorkspace({
+    queryClient,
+    pushNotice,
+  })
+
   const { activeView, handleViewChange } = useWorkspaceTabs({
-    catalogDirty,
-    studioDirty,
+    catalogDirty: catalogWorkspace.catalogDirty,
+    studioDirty: catalogWorkspace.studioDirty,
   })
-
-  const defaultFormByTask = useMemo(() => {
-    const map: Record<string, Record<string, unknown>> = {}
-    for (const schema of schemas) {
-      map[schema.taskType] = buildDefaults(schema)
-    }
-    return map
-  }, [schemas])
-
-  const selectedTask = useMemo(() => {
-    if (selectedTaskState && schemas.some((schema) => schema.taskType === selectedTaskState)) {
-      return selectedTaskState
-    }
-    return schemas[0]?.taskType ?? ''
-  }, [schemas, selectedTaskState])
-
-  const selectedSchema = useMemo(
-    () => schemas.find((schema) => schema.taskType === selectedTask),
-    [schemas, selectedTask],
-  )
-  const selectedValues = useMemo(() => {
-    if (!selectedTask) return {}
-    return {
-      ...(defaultFormByTask[selectedTask] ?? {}),
-      ...(formByTask[selectedTask] ?? {}),
-    }
-  }, [defaultFormByTask, formByTask, selectedTask])
-
-  const runsQuery = useQuery({
-    queryKey: ['runs'],
-    queryFn: api.getRuns,
-    refetchInterval: 1500,
-  })
-
-  const mlflowRunsQuery = useQuery({
-    queryKey: ['mlflow-runs', selectedTask],
-    queryFn: () => api.getMlflowRuns(selectedTask),
-    enabled: Boolean(selectedTask),
-    refetchInterval: 3000,
-  })
-
-  const mlflowExperimentsQuery = useQuery({
-    queryKey: ['mlflow-experiments'],
-    queryFn: () => api.getMlflowExperiments(String(selectedValues.mlflow_tracking_uri ?? 'http://127.0.0.1:5001')),
-    enabled: Boolean(selectedTask),
-    refetchInterval: 30000,
-  })
-
-  const rayServingQuery = useQuery({
-    queryKey: ['ray-serving'],
-    queryFn: api.listRayServing,
-    refetchInterval: 3000,
-  })
-
-  const localModelsQuery = useQuery({
-    queryKey: ['local-models'],
-    queryFn: api.listLocalModels,
-    refetchInterval: 3000,
-  })
-
-  const registryModelsQuery = useQuery({
-    queryKey: ['ftp-registry-catalog-models'],
-    queryFn: api.getRegistryCatalogModels,
-    refetchInterval: 5000,
-  })
-
-  const launchMutation = useMutation({
-    mutationFn: () => api.startRun(selectedTask, selectedValues),
-    onSuccess: (run) => {
-      pushNotice('success', `Training started: ${run.runId.slice(0, 8)}`)
-      queryClient.invalidateQueries({ queryKey: ['runs'] })
-    },
-    onError: (error) => pushNotice('error', 'Failed to start run', errorMessage(error)),
-  })
-
-  const validateCatalogMutation = useMutation({
-    mutationFn: () => api.validateCatalog(catalogDraft),
-    onSuccess: (result) => {
-      setCatalogValidation(result)
-      setCatalogValidationError(null)
-      setCatalogValidationState('valid')
-      setCatalogValidatedAt(new Date().toISOString())
-      pushNotice('success', `Catalog validation passed (${result.taskCount} tasks)`)
-    },
-    onError: (error) => {
-      const message = errorMessage(error)
-      setCatalogValidationError(message)
-      setCatalogValidationState('invalid')
-      pushNotice('error', 'Catalog validation failed', message)
-    },
-  })
-
-  const formatCatalogMutation = useMutation({
-    mutationFn: () => api.formatCatalog(catalogDraft),
-    onSuccess: (result) => {
-      setCatalogDraftOverride(result.content)
-      setCatalogValidation({
-        valid: true,
-        taskCount: result.taskCount,
-        tasks: result.tasks,
-      })
-      setCatalogValidationError(null)
-      setCatalogValidationState('valid')
-      setCatalogValidatedAt(new Date().toISOString())
-      pushNotice('success', 'Catalog formatted', `Normalized YAML (${result.taskCount} tasks)`)
-    },
-    onError: (error) => {
-      const message = errorMessage(error)
-      setCatalogValidationError(message)
-      setCatalogValidationState('invalid')
-      pushNotice('error', 'Catalog format failed', message)
-    },
-  })
-
-  const saveCatalogMutation = useMutation({
-    mutationFn: () => api.saveCatalog({ content: catalogDraft, createBackup }),
-    onSuccess: (saved) => {
-      setCatalogDraftOverride(saved.content)
-      setCatalogBaselineOverride(saved.content)
-      setCatalogValidation({
-        valid: true,
-        taskCount: saved.taskCount,
-        tasks: saved.tasks,
-      })
-      setCatalogValidationError(null)
-      setCatalogValidationState('valid')
-      setCatalogValidatedAt(new Date().toISOString())
-      pushNotice(
-        'success',
-        'Catalog saved and applied',
-        saved.backupPath ? `Backup created: ${saved.backupPath}` : 'Saved without backup',
-      )
-      queryClient.invalidateQueries({ queryKey: ['catalog'] })
-      queryClient.invalidateQueries({ queryKey: ['schemas'] })
-    },
-    onError: (error) => {
-      setCatalogValidationState('invalid')
-      pushNotice('error', 'Catalog save failed', errorMessage(error))
-    },
-  })
-
-  const saveCatalogStudioMutation = useMutation({
-    mutationFn: () =>
-      api.saveCatalogStudio({
-        tasks: studioDraft.tasks,
-        registryModels: studioDraft.registryModels,
-        createBackup: studioCreateBackup,
-      }),
-    onSuccess: (saved) => {
-      const syncedDraft = {
-        tasks: saved.tasks,
-        registryModels: saved.registryModels,
-      }
-      setStudioDraftOverride(syncedDraft)
-      setStudioBaselineOverride(syncedDraft)
-      setStudioSaveError(null)
-      pushNotice(
-        'success',
-        'Studio catalog saved',
-        saved.backupPath ? `Backup created: ${saved.backupPath}` : 'Saved without backup',
-      )
-      queryClient.invalidateQueries({ queryKey: ['catalog-studio'] })
-      queryClient.invalidateQueries({ queryKey: ['catalog'] })
-      queryClient.invalidateQueries({ queryKey: ['schemas'] })
-      queryClient.invalidateQueries({ queryKey: ['ftp-registry-catalog-models'] })
-    },
-    onError: (error) => {
-      const message = errorMessage(error)
-      setStudioSaveError(message)
-      pushNotice('error', 'Studio save failed', message)
-    },
-  })
-
-  const stopMutation = useMutation({
-    mutationFn: (runId: string) => api.stopRun(runId),
-    onSuccess: (run) => {
-      pushNotice('info', `Run stopped: ${run.runId.slice(0, 8)}`)
-      queryClient.invalidateQueries({ queryKey: ['runs'] })
-    },
-    onError: (error) => pushNotice('error', 'Failed to stop run', errorMessage(error)),
-  })
-
-  const mlflowActionMutation = useMutation({
-    mutationFn: async (action: () => Promise<unknown>) => action(),
-    onSuccess: (result) => {
-      pushNotice('success', 'MLflow action completed', JSON.stringify(result, null, 2))
-      queryClient.invalidateQueries({ queryKey: ['mlflow-runs'] })
-    },
-    onError: (error) => pushNotice('error', 'MLflow action failed', errorMessage(error)),
-  })
-
-  const servingMutation = useMutation({
-    mutationFn: async (action: () => Promise<unknown>) => action(),
-    onSuccess: (result) => {
-      pushNotice('success', 'Serving action completed', JSON.stringify(result, null, 2))
-      queryClient.invalidateQueries({ queryKey: ['ray-serving'] })
-      queryClient.invalidateQueries({ queryKey: ['local-models'] })
-      queryClient.invalidateQueries({ queryKey: ['ftp-registry-catalog-models'] })
-      queryClient.invalidateQueries({ queryKey: ['mlflow-experiments'] })
-    },
-    onError: (error) => pushNotice('error', 'Serving action failed', errorMessage(error)),
-  })
-
-  const isBusy =
-    launchMutation.isPending ||
-    stopMutation.isPending ||
-    mlflowActionMutation.isPending ||
-    servingMutation.isPending ||
-    validateCatalogMutation.isPending ||
-    formatCatalogMutation.isPending ||
-    saveCatalogMutation.isPending ||
-    saveCatalogStudioMutation.isPending
-
-  const headline = useMemo(() => {
-    const running = (runsQuery.data ?? []).filter((run) => run.status === 'running').length
-    const finished = (runsQuery.data ?? []).filter((run) => run.status === 'completed').length
-    return { running, finished }
-  }, [runsQuery.data])
 
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
         Skip to Main Content
       </a>
+
       <AppHero
-        running={headline.running}
-        completed={headline.finished}
-        taskLabel={(selectedSchema?.title ?? selectedTask) || '-'}
+        running={operationsWorkspace.headline.running}
+        completed={operationsWorkspace.headline.finished}
+        taskLabel={operationsWorkspace.selectedTaskLabel}
       />
 
-      {schemasQuery.isError ? <p className="error-banner">Schema load failed: {errorMessage(schemasQuery.error)}</p> : null}
+      {operationsWorkspace.schemasErrorMessage ? (
+        <p className="error-banner">Schema load failed: {operationsWorkspace.schemasErrorMessage}</p>
+      ) : null}
 
-      <WorkspaceTabs
-        activeView={activeView}
-        catalogDirty={catalogDirty}
-        studioDirty={studioDirty}
-        onViewChange={handleViewChange}
-      />
+      <div className="workspace-layout">
+        <WorkspaceSidebar
+          activeView={activeView}
+          catalogDirty={catalogWorkspace.catalogDirty}
+          studioDirty={catalogWorkspace.studioDirty}
+          onViewChange={handleViewChange}
+        />
 
-      <main id="main-content">
-        {activeView === 'catalog' ? (
-          <section id="panel-catalog" role="tabpanel" aria-labelledby="tab-catalog">
-            <CatalogManagerPanel
-              catalogPath={catalogQuery.data?.path ?? 'Loading…'}
-              catalogExists={catalogQuery.data?.exists ?? true}
-              modifiedAt={catalogQuery.data?.modifiedAt ?? null}
-              validationState={catalogValidationState}
-              validatedAt={catalogValidatedAt}
-              value={catalogDraft}
-              dirty={catalogDirty}
-              createBackup={createBackup}
-              isLoading={catalogQuery.isLoading}
-              isValidating={validateCatalogMutation.isPending}
-              isFormatting={formatCatalogMutation.isPending}
-              isSaving={saveCatalogMutation.isPending}
-              validationTaskCount={catalogTaskCount}
-              validationTasks={catalogTasks}
-              validationError={catalogValidationError}
-              onValueChange={(nextValue) => {
-                setCatalogDraftOverride(nextValue)
-                setCatalogValidationError(null)
-                setCatalogValidationState('idle')
-              }}
-              onCreateBackupChange={setCreateBackup}
-              onValidate={() => validateCatalogMutation.mutate()}
-              onFormat={() => formatCatalogMutation.mutate()}
-              onSave={() => saveCatalogMutation.mutate()}
-              onResetDraft={() => {
-                setCatalogDraftOverride(catalogBaseline)
-                setCatalogValidationError(null)
-                setCatalogValidationState('idle')
-              }}
-              onReload={() => {
-                setCatalogValidationError(null)
-                setCatalogDraftOverride(null)
-                setCatalogBaselineOverride(null)
-                setCatalogValidation(null)
-                setCatalogValidationState('idle')
-                setCatalogValidatedAt(null)
-                catalogQuery.refetch()
-              }}
-            />
-          </section>
-        ) : activeView === 'studio' ? (
-          <section id="panel-studio" role="tabpanel" aria-labelledby="tab-studio">
-            <CatalogStudioPanel
-              catalogPath={catalogStudioQuery.data?.path ?? 'Loading…'}
-              modifiedAt={catalogStudioQuery.data?.modifiedAt ?? null}
-              tasks={studioDraft.tasks}
-              registryModels={studioDraft.registryModels}
-              dirty={studioDirty}
-              createBackup={studioCreateBackup}
-              isLoading={catalogStudioQuery.isLoading}
-              isSaving={saveCatalogStudioMutation.isPending}
-              saveError={studioSaveError}
-              onCreateBackupChange={setStudioCreateBackup}
-              onTasksChange={(nextTasks) => {
-                setStudioSaveError(null)
-                setStudioDraftOverride({
-                  ...studioDraft,
-                  tasks: nextTasks,
-                })
-              }}
-              onRegistryModelsChange={(nextRegistryModels) => {
-                setStudioSaveError(null)
-                setStudioDraftOverride({
-                  ...studioDraft,
-                  registryModels: nextRegistryModels,
-                })
-              }}
-              onSave={() => saveCatalogStudioMutation.mutate()}
-              onResetDraft={() => {
-                setStudioSaveError(null)
-                setStudioDraftOverride(studioBaseline)
-              }}
-              onReload={() => {
-                setStudioSaveError(null)
-                setStudioDraftOverride(null)
-                setStudioBaselineOverride(null)
-                catalogStudioQuery.refetch()
-              }}
-            />
-          </section>
-        ) : (
-          <section id="panel-operations" role="tabpanel" aria-labelledby="tab-operations" className="operations-panel">
-            <LaunchPanel
-              schemas={schemas}
-              selectedTask={selectedTask}
-              values={selectedValues}
-              onTaskChange={(task) => {
-                setSelectedTaskState(task)
-              }}
-              onFieldChange={(name, value) => {
-                setFormByTask((prev) => ({
-                  ...prev,
-                  [selectedTask]: {
-                    ...prev[selectedTask],
-                    [name]: value,
-                  },
-                }))
-              }}
-              onLaunch={() => launchMutation.mutate()}
-              isLaunching={launchMutation.isPending}
-            />
-
-            <RunsPanel
-              runs={runsQuery.data ?? []}
-              onStop={(runId) => {
-                if (!window.confirm('Stop this training run?')) return
-                stopMutation.mutate(runId)
-              }}
-              isStopping={stopMutation.isPending}
-            />
-
-            <MlflowPanel
-              key={selectedTask}
-              taskType={selectedTask}
-              taskTitle={selectedSchema?.title ?? selectedTask}
-              runs={mlflowRunsQuery.data ?? []}
-              defaultMetric={selectedSchema?.mlflow.metric ?? 'val_accuracy'}
-              defaultMode={selectedSchema?.mlflow.mode ?? 'max'}
-              defaultModelName={selectedSchema?.mlflow.modelName ?? `${selectedTask}-best-model`}
-              defaultArtifactPath={selectedSchema?.mlflow.artifactPath ?? 'model'}
-              defaultTrackingUri={String(selectedValues.mlflow_tracking_uri ?? 'http://127.0.0.1:5001')}
-              defaultExperiment={String(selectedValues.mlflow_experiment ?? 'void-train-manager')}
-              busy={isBusy}
-              onSelectBest={(payload) => mlflowActionMutation.mutate(() => api.selectBest(payload))}
-              onMigrateTensorBoard={(payload) => mlflowActionMutation.mutate(() => api.migrateTensorBoard(payload))}
-            />
-
-            <ServingPanel
-              localModels={localModelsQuery.data ?? []}
-              rayServers={rayServingQuery.data ?? []}
-              mlflowExperiments={mlflowExperimentsQuery.data ?? []}
-              registryModels={registryModelsQuery.data ?? []}
-              busy={isBusy}
-              onDownloadFromMlflow={(payload) => servingMutation.mutate(() => api.downloadModelFromMlflow(payload))}
-              onDownloadFromFtp={(payload) => servingMutation.mutate(() => api.downloadModelFromFtp(payload))}
-              onDownloadRegistryModel={(payload) => servingMutation.mutate(() => api.downloadRegistryModel(payload))}
-              onStartRayServing={(payload) => servingMutation.mutate(() => api.startRayServing(payload))}
-              onStopRayServing={(serverId) => servingMutation.mutate(() => api.stopRayServing(serverId))}
-              onLoadLocalModel={(payload) => servingMutation.mutate(() => api.loadLocalModel(payload))}
-              onPublishFtpModel={(payload) => servingMutation.mutate(() => api.publishFtpModel(payload))}
-              onPublishBestFtpModel={(payload) => servingMutation.mutate(() => api.publishBestFtpModel(payload))}
-              onUploadLocalFtpModel={(payload) => servingMutation.mutate(() => api.uploadLocalFtpModel(payload))}
-              onPredict={(alias, inputs) => servingMutation.mutate(() => api.predictLocal(alias, inputs))}
-            />
-          </section>
-        )}
-      </main>
+        <WorkspaceContent
+          activeView={activeView}
+          catalogPanelProps={catalogWorkspace.catalogPanelProps}
+          studioPanelProps={catalogWorkspace.studioPanelProps}
+          operationsPanelProps={operationsWorkspace.operationsPanelProps}
+        />
+      </div>
 
       <NoticeStack notices={notices} />
     </div>
