@@ -6,6 +6,7 @@ import {
   defaultRegistryModel,
   defaultTask,
   formatDate,
+  parseExtraFieldsValue,
   parseFieldOverridesValue,
   splitCsv,
 } from './catalog-studio/catalogStudioUtils'
@@ -48,6 +49,8 @@ export function CatalogStudioPanel({
 }: CatalogStudioPanelProps) {
   const [overridesTextByIndex, setOverridesTextByIndex] = useState<Record<number, string>>({})
   const [overrideErrors, setOverrideErrors] = useState<Record<number, string>>({})
+  const [extraFieldsTextByIndex, setExtraFieldsTextByIndex] = useState<Record<number, string>>({})
+  const [extraFieldErrors, setExtraFieldErrors] = useState<Record<number, string>>({})
   const [taskFilter, setTaskFilter] = useState('')
   const [expandedTaskIndexes, setExpandedTaskIndexes] = useState<Record<number, boolean>>({ 0: true })
 
@@ -70,10 +73,26 @@ export function CatalogStudioPanel({
       }
     }).length
   }, [overridesTextByIndex, tasks])
+  const extraFieldErrorCount = useMemo(() => Object.keys(extraFieldErrors).length, [extraFieldErrors])
+  const extraFieldDraftMismatchCount = useMemo(() => {
+    return Object.entries(extraFieldsTextByIndex).filter(([indexText, text]) => {
+      const index = Number(indexText)
+      const task = tasks[index]
+      if (!task) return false
+      try {
+        const parsed = parseExtraFieldsValue(text)
+        return JSON.stringify(parsed) !== JSON.stringify(task.extraFields)
+      } catch {
+        return true
+      }
+    }).length
+  }, [extraFieldsTextByIndex, tasks])
   const canSave =
     validationIssues.length === 0 &&
     overrideErrorCount === 0 &&
     overrideDraftMismatchCount === 0 &&
+    extraFieldErrorCount === 0 &&
+    extraFieldDraftMismatchCount === 0 &&
     !isSaving &&
     !isLoading &&
     tasks.length > 0
@@ -165,13 +184,17 @@ export function CatalogStudioPanel({
         </div>
       ) : null}
 
-      {overrideErrorCount > 0 || overrideDraftMismatchCount > 0 ? (
+      {overrideErrorCount > 0 || overrideDraftMismatchCount > 0 || extraFieldErrorCount > 0 || extraFieldDraftMismatchCount > 0 ? (
         <div className="catalog-inline-warning">
-          <strong>fieldOverrides 점검 필요</strong>
+          <strong>Advanced JSON 점검 필요</strong>
           <ul className="catalog-inline-warning-list">
             {overrideErrorCount > 0 ? <li>JSON 파싱 오류 {overrideErrorCount}개를 수정하세요.</li> : null}
             {overrideDraftMismatchCount > 0 ? (
               <li>수정한 fieldOverrides를 blur 처리(포커스 이동)해 반영한 뒤 저장하세요.</li>
+            ) : null}
+            {extraFieldErrorCount > 0 ? <li>extraFields JSON 파싱 오류 {extraFieldErrorCount}개를 수정하세요.</li> : null}
+            {extraFieldDraftMismatchCount > 0 ? (
+              <li>수정한 extraFields를 blur 처리(포커스 이동)해 반영한 뒤 저장하세요.</li>
             ) : null}
           </ul>
         </div>
@@ -387,6 +410,38 @@ export function CatalogStudioPanel({
                           }}
                         />
                         {overrideErrors[index] ? <small className="catalog-error-inline">{overrideErrors[index]}</small> : null}
+                      </label>
+                      <label className="studio-overrides">
+                        extraFields (JSON array)
+                        <textarea
+                          rows={8}
+                          value={extraFieldsTextByIndex[index] ?? JSON.stringify(task.extraFields, null, 2)}
+                          onChange={(event) =>
+                            setExtraFieldsTextByIndex((prev) => ({
+                              ...prev,
+                              [index]: event.target.value,
+                            }))
+                          }
+                          onBlur={(event) => {
+                            try {
+                              const parsed = parseExtraFieldsValue(event.target.value)
+                              updateTask(index, { extraFields: parsed })
+                              setExtraFieldsTextByIndex((prev) => ({
+                                ...prev,
+                                [index]: JSON.stringify(parsed, null, 2),
+                              }))
+                              setExtraFieldErrors((prev) => {
+                                const next = { ...prev }
+                                delete next[index]
+                                return next
+                              })
+                            } catch (error) {
+                              const detail = error instanceof Error ? error.message : 'JSON parse error'
+                              setExtraFieldErrors((prev) => ({ ...prev, [index]: detail }))
+                            }
+                          }}
+                        />
+                        {extraFieldErrors[index] ? <small className="catalog-error-inline">{extraFieldErrors[index]}</small> : null}
                       </label>
                     </div>
                   </details>

@@ -26,6 +26,26 @@
 2. `Format YAML`
 3. `Save & Apply`
 
+`extraFields`를 task에 추가하면 `Run Launcher`에 동적 입력 폼이 자동 생성됩니다.
+
+```yaml
+tasks:
+  - taskType: classification
+    runner:
+      startMethod: python_script
+      target: /abs/path/to/your/train.py
+    extraFields:
+      - name: task_name
+        valueType: str
+        required: true
+        default: classification
+      - name: profile
+        valueType: str
+        type: select
+        default: quick
+        choices: [quick, full]
+```
+
 ## 3) Model Registry Browser (모델별 stage/version 조회 + 다운로드)
 
 `Model Serving` 하단에서 `registryModels` 기준 모델 목록을 보고 다운로드합니다.

@@ -53,6 +53,12 @@ class CatalogStudioRoutesTest(unittest.TestCase):
                           mode: max
                           modelName: classification-best-model
                           artifactPath: model
+                        extraFields:
+                          - name: train_profile
+                            valueType: str
+                            type: select
+                            default: fast
+                            choices: [fast, full]
                     registryModels:
                       - id: classification
                         title: Classification Model
@@ -73,6 +79,7 @@ class CatalogStudioRoutesTest(unittest.TestCase):
         self.assertEqual(payload["taskCount"], 1)
         self.assertEqual(payload["registryModelCount"], 1)
         self.assertEqual(payload["tasks"][0]["taskType"], "classification")
+        self.assertEqual(payload["tasks"][0]["extraFields"][0]["name"], "train_profile")
         self.assertEqual(payload["registryModels"][0]["id"], "classification")
 
     def test_save_catalog_studio_with_backup(self) -> None:
@@ -97,6 +104,17 @@ class CatalogStudioRoutesTest(unittest.TestCase):
                         fieldOrder=["run_name"],
                         hiddenFields=[],
                         fieldOverrides={"run_name": {"default": "quick-run"}},
+                        extraFields=[
+                            {
+                                "name": "dataset_variant",
+                                "valueType": "str",
+                                "type": "select",
+                                "required": True,
+                                "default": "v1",
+                                "choices": ["v1", "v2"],
+                                "group": "custom",
+                            }
+                        ],
                     )
                 ],
                 registryModels=[
@@ -123,6 +141,7 @@ class CatalogStudioRoutesTest(unittest.TestCase):
                 self.assertEqual(result["taskCount"], 1)
                 self.assertEqual(result["registryModelCount"], 1)
                 self.assertIsNotNone(result["backupPath"])
+                self.assertEqual(result["tasks"][0]["extraFields"][0]["name"], "dataset_variant")
                 self.assertTrue(Path(str(result["backupPath"])).exists())
                 self.assertTrue(fake_getter.cleared)
                 self.assertTrue(fake_getter.called)

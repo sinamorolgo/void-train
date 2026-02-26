@@ -82,6 +82,8 @@ def _task_definition(task_type: str) -> TaskDefinition:
 def _build_task_schema(task: TaskDefinition) -> dict[str, Any]:
     schema = dataclass_schema(task.base_task_type)
     field_map = {field["name"]: dict(field) for field in schema["fields"]}
+    for extra in task.extra_fields:
+        field_map[extra.name] = extra.to_schema_field()
 
     for field_name, patch in task.field_overrides.items():
         if field_name not in field_map:
@@ -129,6 +131,7 @@ def _task_summary(task: TaskDefinition) -> dict[str, Any]:
         "runnerStartMethod": task.runner.start_method,
         "fieldOverrideCount": len(task.field_overrides),
         "fieldOrderCount": len(task.field_order),
+        "extraFieldCount": len(task.extra_fields),
     }
 
 
@@ -163,6 +166,25 @@ def _studio_task_payload(task: TaskDefinition) -> dict[str, Any]:
         "fieldOrder": list(task.field_order),
         "hiddenFields": sorted(task.hidden_fields),
         "fieldOverrides": task.field_overrides,
+        "extraFields": [
+            {
+                "name": field.name,
+                "valueType": field.value_type,
+                "type": field.input_type,
+                "required": field.required,
+                "default": field.default,
+                "label": field.label,
+                "description": field.description,
+                "group": field.group,
+                "choices": list(field.choices or []),
+                "min": field.min_value,
+                "max": field.max_value,
+                "step": field.step,
+                "cliArg": field.cli_arg,
+                "passWhenEmpty": field.pass_when_empty,
+            }
+            for field in task.extra_fields
+        ],
     }
 
 
@@ -218,6 +240,7 @@ def _build_task_raw_payload(item: CatalogStudioTaskItem) -> dict[str, Any]:
         "fieldOrder": [field for field in item.fieldOrder if field.strip()],
         "hiddenFields": [field for field in item.hiddenFields if field.strip()],
         "fieldOverrides": item.fieldOverrides,
+        "extraFields": [field.model_dump(mode="python") for field in item.extraFields],
     }
 
 

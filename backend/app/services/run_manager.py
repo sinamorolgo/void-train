@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.settings import get_settings
-from app.core.task_catalog import RunnerConfig, TaskDefinition, get_task_catalog
+from app.core.task_catalog import ExtraFieldDefinition, RunnerConfig, TaskDefinition, get_task_catalog
 from app.core.train_config import (
     PROGRESS_PREFIX,
     RUN_META_PREFIX,
@@ -20,6 +20,7 @@ from app.core.train_config import (
     build_config,
     config_to_cli_args,
     config_to_dict,
+    parse_bool,
 )
 from app.services.process_utils import build_pythonpath_env, stop_process
 
@@ -144,6 +145,71 @@ class RunManager:
 
         return updated
 
+    def _coerce_extra_value(self, field: ExtraFieldDefinition, raw_value: Any) -> Any:
+        if field.value_type == "str":
+            return str(raw_value)
+        if field.value_type == "int":
+            try:
+                return int(raw_value)
+            except (TypeError, ValueError) as error:
+                raise ValueError(f"Invalid int value for extra field '{field.name}': {raw_value!r}") from error
+        if field.value_type == "float":
+            try:
+                return float(raw_value)
+            except (TypeError, ValueError) as error:
+                raise ValueError(f"Invalid float value for extra field '{field.name}': {raw_value!r}") from error
+        if field.value_type == "bool":
+            try:
+                return parse_bool(raw_value)
+            except ValueError as error:
+                raise ValueError(f"Invalid bool value for extra field '{field.name}': {raw_value!r}") from error
+        return raw_value
+
+    def _serialize_cli_value(self, value: Any) -> str:
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
+
+    def _build_extra_cli_args(
+        self,
+        task: TaskDefinition,
+        raw_values: dict[str, Any],
+    ) -> tuple[list[str], dict[str, Any]]:
+        cli_args: list[str] = []
+        resolved: dict[str, Any] = {}
+
+        for field in task.extra_fields:
+            raw_value = raw_values.get(field.name)
+            missing = raw_value is None or (isinstance(raw_value, str) and not raw_value.strip())
+
+            if missing:
+                if field.default is not None:
+                    value = field.default
+                elif field.pass_when_empty:
+                    value = ""
+                elif field.required:
+                    raise ValueError(f"Missing required extra field: {field.name}")
+                else:
+                    continue
+            else:
+                value = raw_value
+
+            if value == "" and not field.pass_when_empty:
+                if field.required:
+                    raise ValueError(f"Missing required extra field: {field.name}")
+                continue
+
+            coerced = value if value == "" else self._coerce_extra_value(field, value)
+            if field.choices and str(coerced) not in field.choices:
+                raise ValueError(
+                    f"Invalid value for extra field '{field.name}': {coerced!r}. choices={field.choices}"
+                )
+
+            cli_args.extend([field.cli_flag(), self._serialize_cli_value(coerced)])
+            resolved[field.name] = coerced
+
+        return cli_args, resolved
+
     def start_run(self, task_type: str, raw_config: dict[str, Any]) -> dict[str, Any]:
         task_catalog = get_task_catalog()
         task = task_catalog.get_task(task_type)
@@ -158,8 +224,10 @@ class RunManager:
         )
         config = build_config(task.base_task_type, prepared_values)
         config_data = config_to_dict(config)
+        extra_cli_args, extra_config_data = self._build_extra_cli_args(task, prepared_values)
+        config_data.update(extra_config_data)
 
-        command = self._resolve_command(task, config_to_cli_args(config))
+        command = self._resolve_command(task, config_to_cli_args(config) + extra_cli_args)
 
         env = build_pythonpath_env(prepend_path=str(self._settings.backend_root))
         env["PYTHONUNBUFFERED"] = "1"

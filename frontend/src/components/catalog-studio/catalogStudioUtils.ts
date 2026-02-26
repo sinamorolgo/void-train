@@ -21,6 +21,7 @@ export function defaultTask(baseTaskType: BaseTaskType): CatalogStudioTask {
       fieldOverrides: {
         run_name: { default: 'seg-quick-run' },
       },
+      extraFields: [],
     }
   }
 
@@ -43,6 +44,7 @@ export function defaultTask(baseTaskType: BaseTaskType): CatalogStudioTask {
     fieldOverrides: {
       run_name: { default: 'clf-quick-run' },
     },
+    extraFields: [],
   }
 }
 
@@ -93,6 +95,14 @@ export function parseFieldOverridesValue(raw: string): Record<string, Record<str
   return parsed as Record<string, Record<string, unknown>>
 }
 
+export function parseExtraFieldsValue(raw: string): CatalogStudioTask['extraFields'] {
+  const parsed = JSON.parse(raw || '[]') as unknown
+  if (!Array.isArray(parsed)) {
+    throw new Error('extraFields must be a JSON array')
+  }
+  return parsed as CatalogStudioTask['extraFields']
+}
+
 export function collectValidationIssues(
   tasks: CatalogStudioTask[],
   registryModels: CatalogStudioRegistryModel[],
@@ -113,6 +123,20 @@ export function collectValidationIssues(
       if (taskTypeSet.has(key)) issues.push(`${label}: duplicated taskType '${task.taskType}'`)
       taskTypeSet.add(key)
     }
+
+    const extraFieldNameSet = new Set<string>()
+    task.extraFields.forEach((field, fieldIndex) => {
+      const fieldLabel = `${label} extraField #${fieldIndex + 1}`
+      const fieldName = field.name?.trim()
+      if (!fieldName) {
+        issues.push(`${fieldLabel}: name is required`)
+      } else {
+        const keyName = fieldName.toLowerCase()
+        if (extraFieldNameSet.has(keyName)) issues.push(`${fieldLabel}: duplicated name '${fieldName}'`)
+        extraFieldNameSet.add(keyName)
+      }
+      if (!field.valueType) issues.push(`${fieldLabel}: valueType is required`)
+    })
   })
 
   registryModels.forEach((model, index) => {

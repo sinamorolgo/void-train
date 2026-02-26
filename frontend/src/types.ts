@@ -18,6 +18,8 @@ export interface ConfigField {
   min?: number
   max?: number
   step?: number
+  cliArg?: string
+  isExtra?: boolean
 }
 
 export interface TaskSchema {
@@ -105,6 +107,24 @@ export interface CatalogTaskSummary {
   runnerStartMethod: 'python_script' | 'python_module'
   fieldOverrideCount: number
   fieldOrderCount: number
+  extraFieldCount?: number
+}
+
+export interface CatalogExtraField {
+  name: string
+  valueType: 'str' | 'int' | 'float' | 'bool'
+  type?: 'text' | 'number' | 'boolean' | 'select' | null
+  required: boolean
+  default: unknown
+  label?: string | null
+  description: string
+  group: string
+  choices: string[]
+  min?: number | null
+  max?: number | null
+  step?: number | null
+  cliArg?: string | null
+  passWhenEmpty: boolean
 }
 
 export interface RegistryVersionSummary {
@@ -175,6 +195,7 @@ export interface CatalogStudioTask {
   fieldOrder: string[]
   hiddenFields: string[]
   fieldOverrides: Record<string, Record<string, unknown>>
+  extraFields: CatalogExtraField[]
 }
 
 export interface CatalogStudioRegistryModel {

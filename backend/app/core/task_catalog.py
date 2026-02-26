@@ -11,11 +11,13 @@ from typing import Any, Literal
 import yaml
 
 from app.core.settings import get_settings
-from app.core.train_config import TaskType
+from app.core.train_config import TaskType, dataclass_schema, parse_bool
 
 RunnerStartMethod = Literal["python_script", "python_module"]
 MlflowMode = Literal["max", "min"]
 RegistryStage = Literal["dev", "release"]
+ExtraFieldValueType = Literal["str", "int", "float", "bool"]
+FieldInputType = Literal["text", "number", "boolean", "select"]
 
 DEFAULT_CATALOG: dict[str, Any] = {
     "tasks": [
@@ -227,6 +229,47 @@ class MlflowDefaults:
 
 
 @dataclass(frozen=True)
+class ExtraFieldDefinition:
+    name: str
+    value_type: ExtraFieldValueType
+    input_type: FieldInputType
+    required: bool = False
+    default: Any | None = None
+    label: str | None = None
+    description: str = ""
+    group: str = "custom"
+    choices: list[str] | None = None
+    min_value: float | int | None = None
+    max_value: float | int | None = None
+    step: float | int | None = None
+    cli_arg: str | None = None
+    pass_when_empty: bool = False
+
+    def cli_flag(self) -> str:
+        if self.cli_arg:
+            return self.cli_arg if self.cli_arg.startswith("--") else f"--{self.cli_arg.lstrip('-')}"
+        return f"--{self.name.replace('_', '-')}"
+
+    def to_schema_field(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "type": self.input_type,
+            "valueType": self.value_type,
+            "required": self.required,
+            "default": self.default,
+            "label": self.label or self.name,
+            "description": self.description,
+            "group": self.group,
+            "choices": list(self.choices or []),
+            "min": self.min_value,
+            "max": self.max_value,
+            "step": self.step,
+            "cliArg": self.cli_flag(),
+            "isExtra": True,
+        }
+
+
+@dataclass(frozen=True)
 class TaskDefinition:
     task_type: str
     enabled: bool
@@ -238,12 +281,16 @@ class TaskDefinition:
     field_order: list[str]
     hidden_fields: set[str]
     field_overrides: dict[str, dict[str, Any]]
+    extra_fields: list[ExtraFieldDefinition]
 
     def default_field_values(self) -> dict[str, Any]:
         defaults: dict[str, Any] = {}
         for field_name, patch in self.field_overrides.items():
             if isinstance(patch, dict) and "default" in patch:
                 defaults[field_name] = patch["default"]
+        for field in self.extra_fields:
+            if field.default is not None:
+                defaults[field.name] = field.default
         return defaults
 
 
@@ -257,6 +304,179 @@ class RegistryModelDefinition:
     default_stage: RegistryStage
     default_version: str
     default_destination_dir: str
+
+
+def _coerce_extra_field_value(*, value: Any, value_type: ExtraFieldValueType, field_name: str) -> Any:
+    if value is None:
+        return None
+    if value_type == "str":
+        return str(value)
+    if value_type == "int":
+        try:
+            return int(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"Invalid int value for {field_name}: {value!r}") from error
+    if value_type == "float":
+        try:
+            return float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"Invalid float value for {field_name}: {value!r}") from error
+    if value_type == "bool":
+        try:
+            return parse_bool(value)
+        except ValueError as error:
+            raise ValueError(f"Invalid bool value for {field_name}: {value!r}") from error
+    return value
+
+
+def _parse_extra_field_value_type(value: Any, *, field_name: str) -> ExtraFieldValueType:
+    raw = str(value or "str").strip().lower()
+    normalized = {
+        "string": "str",
+        "text": "str",
+        "int": "int",
+        "integer": "int",
+        "float": "float",
+        "double": "float",
+        "number": "float",
+        "bool": "bool",
+        "boolean": "bool",
+    }.get(raw, raw)
+    if normalized in {"str", "int", "float", "bool"}:
+        return normalized  # type: ignore[return-value]
+    raise ValueError(f"Invalid valueType for {field_name}: {value!r}")
+
+
+def _parse_extra_field_input_type(
+    value: Any,
+    *,
+    value_type: ExtraFieldValueType,
+    has_choices: bool,
+    field_name: str,
+) -> FieldInputType:
+    if value is None or str(value).strip() == "":
+        if has_choices:
+            return "select"
+        if value_type == "bool":
+            return "boolean"
+        if value_type in {"int", "float"}:
+            return "number"
+        return "text"
+
+    input_type = str(value).strip().lower()
+    if input_type not in {"text", "number", "boolean", "select"}:
+        raise ValueError(f"Invalid type for {field_name}: {value!r}")
+    if input_type == "boolean" and value_type != "bool":
+        raise ValueError(f"{field_name}: type='boolean' requires valueType='bool'")
+    if input_type == "select" and not has_choices:
+        raise ValueError(f"{field_name}: type='select' requires non-empty choices")
+    return input_type  # type: ignore[return-value]
+
+
+def _parse_optional_number(value: Any, *, field_name: str) -> float | int | None:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    try:
+        return float(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"Invalid number for {field_name}: {value!r}") from error
+
+
+def _parse_extra_fields(
+    raw_task: dict[str, Any],
+    *,
+    task_type: str,
+    base_task_type: TaskType,
+) -> list[ExtraFieldDefinition]:
+    raw_extra = raw_task.get("extraFields", [])
+    if raw_extra is None:
+        return []
+    if not isinstance(raw_extra, list):
+        raise ValueError(f"{task_type}.extraFields must be a list")
+
+    base_field_names = {field["name"] for field in dataclass_schema(base_task_type)["fields"]}
+    seen_names: set[str] = set()
+    parsed: list[ExtraFieldDefinition] = []
+
+    for index, entry in enumerate(raw_extra):
+        field_prefix = f"{task_type}.extraFields[{index}]"
+        if not isinstance(entry, dict):
+            raise ValueError(f"{field_prefix} must be an object")
+
+        name = str(entry.get("name", "")).strip()
+        if not name:
+            raise ValueError(f"{field_prefix}.name is required")
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
+            raise ValueError(f"{field_prefix}.name must match ^[A-Za-z_][A-Za-z0-9_]*$")
+        if name in seen_names:
+            raise ValueError(f"Duplicate extra field name in {task_type}: {name}")
+        if name in base_field_names:
+            raise ValueError(f"{field_prefix}.name conflicts with base config field: {name}")
+        seen_names.add(name)
+
+        value_type = _parse_extra_field_value_type(entry.get("valueType", "str"), field_name=f"{field_prefix}.valueType")
+
+        choices_raw = entry.get("choices")
+        choices: list[str] = []
+        if choices_raw is not None:
+            if not isinstance(choices_raw, list):
+                raise ValueError(f"{field_prefix}.choices must be a list")
+            choices = [str(choice).strip() for choice in choices_raw if str(choice).strip()]
+
+        input_type = _parse_extra_field_input_type(
+            entry.get("type"),
+            value_type=value_type,
+            has_choices=bool(choices),
+            field_name=f"{field_prefix}.type",
+        )
+
+        required = _to_bool(entry.get("required"), default=False)
+        default_value: Any | None = None
+        if "default" in entry:
+            raw_default = entry.get("default")
+            if isinstance(raw_default, str) and not raw_default.strip() and value_type != "str":
+                raw_default = None
+            default_value = _coerce_extra_field_value(
+                value=raw_default,
+                value_type=value_type,
+                field_name=f"{field_prefix}.default",
+            )
+            if choices and default_value is not None and str(default_value) not in choices:
+                raise ValueError(f"{field_prefix}.default must be one of choices")
+
+        cli_arg_raw = str(entry.get("cliArg", "")).strip()
+        cli_arg = None
+        if cli_arg_raw:
+            cli_arg = cli_arg_raw if cli_arg_raw.startswith("--") else f"--{cli_arg_raw.lstrip('-')}"
+
+        pass_when_empty = _to_bool(entry.get("passWhenEmpty"), default=False)
+        if pass_when_empty and value_type != "str":
+            raise ValueError(f"{field_prefix}.passWhenEmpty is only supported when valueType='str'")
+        if choices and value_type != "str":
+            raise ValueError(f"{field_prefix}.choices is only supported when valueType='str'")
+
+        parsed.append(
+            ExtraFieldDefinition(
+                name=name,
+                value_type=value_type,
+                input_type=input_type,
+                required=required,
+                default=default_value,
+                label=str(entry.get("label", "")).strip() or name,
+                description=str(entry.get("description", "")).strip(),
+                group=str(entry.get("group", "custom")).strip() or "custom",
+                choices=choices or None,
+                min_value=_parse_optional_number(entry.get("min"), field_name=f"{field_prefix}.min"),
+                max_value=_parse_optional_number(entry.get("max"), field_name=f"{field_prefix}.max"),
+                step=_parse_optional_number(entry.get("step"), field_name=f"{field_prefix}.step"),
+                cli_arg=cli_arg,
+                pass_when_empty=pass_when_empty,
+            )
+        )
+
+    return parsed
 
 
 class TaskCatalog:
@@ -340,6 +560,11 @@ def _parse_task(raw: dict[str, Any]) -> TaskDefinition:
     for key, value in raw_overrides.items():
         if isinstance(value, dict):
             normalized_overrides[str(key)] = dict(value)
+    extra_fields = _parse_extra_fields(
+        raw,
+        task_type=task_type,
+        base_task_type=base_task,  # type: ignore[arg-type]
+    )
 
     return TaskDefinition(
         task_type=task_type,
@@ -352,6 +577,7 @@ def _parse_task(raw: dict[str, Any]) -> TaskDefinition:
         field_order=normalized_field_order,
         hidden_fields=normalized_hidden_fields,
         field_overrides=normalized_overrides,
+        extra_fields=extra_fields,
     )
 
 

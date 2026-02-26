@@ -102,7 +102,7 @@ TRAINING_CATALOG_PATH=./backend/config/training_catalog.yaml
 
 - task 노출/이름/설명 (`taskType`, `title`, `description`, `enabled`)
 - 시작 방법/타깃 (`runner.startMethod`, `runner.target`, `runner.targetEnvVar`)
-- UI 폼/args 구성 (`fieldOrder`, `hiddenFields`, `fieldOverrides`)
+- UI 폼/args 구성 (`fieldOrder`, `hiddenFields`, `fieldOverrides`, `extraFields`)
 - MLflow 기본값 (`mlflow.metric`, `mlflow.mode`, `mlflow.modelName`, `mlflow.artifactPath`)
 - 모델 브라우저 노출/기본값 (`registryModels`)
 
@@ -164,14 +164,39 @@ export SEGMENTATION_SCRIPT_PATH=/abs/path/to/your/segmentation_train.py
 
 권장 추가 사항:
 
-1. CLI 인자 이름은 기존 dataclass 템플릿 필드를 따르되, 실제 노출/기본값/순서는 `training_catalog.yaml`에서 관리합니다.
-2. 실시간 진행률을 UI에 보내려면 stdout에 아래 prefix JSON 라인을 출력합니다.
+1. 외부 스크립트 전용 인자는 `extraFields`로 선언하면 UI 폼 + 런타임 CLI가 자동 동기화됩니다.
+
+```yaml
+tasks:
+  - taskType: classification
+    baseTaskType: classification
+    runner:
+      startMethod: python_script
+      target: /abs/path/to/your/train.py
+    extraFields:
+      - name: task_name
+        valueType: str
+        required: true
+        default: classification
+      - name: profile
+        valueType: str
+        type: select
+        default: quick
+        choices: [quick, full]
+      - name: dry_run
+        valueType: bool
+        type: boolean
+        default: false
+```
+
+2. 외부 스크립트가 내부 기본 인자를 받지 않는 경우 `hiddenFields`/`fieldOrder`로 UI 노출을 정리하고, 스크립트에서는 필요한 인자만 파싱하도록 맞춥니다.
+3. 실시간 진행률을 UI에 보내려면 stdout에 아래 prefix JSON 라인을 출력합니다.
 
 ```python
 print("VTM_PROGRESS::" + json.dumps({"epoch": epoch, "total_epochs": epochs, "val_accuracy": val_acc}), flush=True)
 ```
 
-3. MLflow run id를 UI에 연결하려면 아래 라인을 출력합니다.
+4. MLflow run id를 UI에 연결하려면 아래 라인을 출력합니다.
 
 ```python
 print("VTM_RUN_META::" + json.dumps({"mlflow_run_id": run.info.run_id}), flush=True)

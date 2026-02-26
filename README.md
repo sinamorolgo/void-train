@@ -67,7 +67,36 @@ pnpm dev
   - UI에 노출할 task 목록/이름/설명
   - task별 시작 방식(`python_script` 또는 `python_module`)과 실행 타깃
   - task별 field 순서/숨김/기본값/라벨/설명
+  - task별 동적 CLI 인자(`extraFields`: 타입/필수 여부/기본값/choices/CLI flag)
   - MLflow best metric/mode/modelName/artifactPath 기본값
+
+### 외부 `train.py` + YAML 인자 정의 예시
+
+```yaml
+tasks:
+  - taskType: classification
+    baseTaskType: classification
+    runner:
+      startMethod: python_script
+      target: /abs/path/to/your/train_classification.py
+    extraFields:
+      - name: task_name
+        valueType: str
+        required: true
+        default: classification
+      - name: profile
+        valueType: str
+        type: select
+        default: quick
+        choices: [quick, full]
+      - name: dry_run
+        valueType: bool
+        type: boolean
+        default: false
+```
+
+- `extraFields`는 런처 UI 폼에 자동 노출되고, `runs/start` 시 CLI 인자로 직렬화되어 전달됩니다.
+- 외부 스크립트가 내부 dataclass 기본 인자까지 받지 않는 경우 `hiddenFields`/`fieldOrder`와 함께 스크립트 인자 규약을 맞춰 사용하세요.
 
 ## 문서
 

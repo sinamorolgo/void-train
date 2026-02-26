@@ -29,6 +29,23 @@ class SaveCatalogRequest(BaseModel):
     createBackup: bool = True
 
 
+class CatalogStudioExtraFieldItem(BaseModel):
+    name: str
+    valueType: Literal["str", "int", "float", "bool"] = "str"
+    type: Literal["text", "number", "boolean", "select"] | None = None
+    required: bool = False
+    default: Any = None
+    label: str | None = None
+    description: str = ""
+    group: str = "custom"
+    choices: list[str] = Field(default_factory=list)
+    min: float | int | None = None
+    max: float | int | None = None
+    step: float | int | None = None
+    cliArg: str | None = None
+    passWhenEmpty: bool = False
+
+
 class CatalogStudioTaskItem(BaseModel):
     taskType: str
     enabled: bool = True
@@ -46,6 +63,7 @@ class CatalogStudioTaskItem(BaseModel):
     fieldOrder: list[str] = Field(default_factory=list)
     hiddenFields: list[str] = Field(default_factory=list)
     fieldOverrides: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    extraFields: list[CatalogStudioExtraFieldItem] = Field(default_factory=list)
 
 
 class CatalogStudioRegistryModelItem(BaseModel):
