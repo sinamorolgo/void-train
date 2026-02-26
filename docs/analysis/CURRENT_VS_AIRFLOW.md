@@ -96,3 +96,69 @@ Airflow 기준으로 바꾸면 일반적으로 다음이 핵심입니다.
 - 중기 확장 대비: **필요 가능성 높음**
 - 실행 방식: **하이브리드로 단계 도입 권장**
 
+## 추가 질문 업데이트 (현재 상태 기준)
+
+### Q1) 지금 상태에서 진행상황은 어떤 식으로 보나?
+
+현재는 Airflow Task UI가 아니라, 앱 자체 run manager + MLflow/TensorBoard를 함께 봅니다.
+
+- 웹 UI `Live Runs`
+  - `GET /api/runs`를 약 1.5초 간격으로 polling
+  - 진행률 바: `progress.epoch / progress.total_epochs`
+  - 최근 로그 tail, status(`running/completed/failed/stopped`), `mlflowRunId` 확인
+- 단건 조회
+  - `GET /api/runs/{run_id}`
+- 실험 지표/아티팩트
+  - `MLflow Ops`(약 3초 polling) 또는 MLflow UI에서 metric/artifact 확인
+  - TensorBoard 이벤트 파일은 `tensorboard_dir`에 기록
+
+주의:
+
+- run 상태(`progress`, `logs`)는 백엔드 프로세스 메모리 기반이라 서버 재시작 시 휘발됩니다.
+
+### Q2) 원리는 어떻게 동작하나?
+
+핵심은 `training_catalog.yaml`을 실행 계약(single source of truth)으로 두고, run manager가 subprocess를 감시하는 구조입니다.
+
+1. UI가 `POST /api/runs/start` 호출
+2. `run_manager`가 catalog task를 로드하고 기본 필드 + `extraFields`를 병합/검증
+3. 최종 CLI 인자를 만들어 trainer 스크립트(`runner.target`)를 subprocess로 실행
+4. trainer stdout에서 아래 prefix 라인을 실시간 파싱
+   - `VTM_PROGRESS::{"epoch":...}`
+   - `VTM_RUN_META::{"mlflow_run_id":"..."}`
+5. 파싱 결과를 run record(`progress`, `mlflowRunId`, `logs`)에 반영
+6. 프론트 polling으로 `Live Runs`가 계속 갱신
+
+### Q3) `train.py`에서 어떤 규약을 지켜야 하나?
+
+샘플 trainer 대신 외부 `train.py`를 `runner.target`으로 연결할 때, 아래 규약을 맞추면 현재 UI/API와 바로 호환됩니다.
+
+1. CLI 인자 규약
+   - catalog의 `baseTaskType`에 해당하는 기본 인자를 파싱해야 함
+   - `extraFields`를 정의했다면 그 CLI flag도 파싱해야 함
+   - (`argparse` 사용 시 미정의 인자를 받으면 종료되므로 주의)
+2. 진행률 출력 규약
+   - stdout 한 줄에 `VTM_PROGRESS::` + JSON 출력
+   - 최소 권장 키: `epoch`, `total_epochs`
+   - 지표 키 예시: `val_accuracy` 또는 `val_iou` (UI metric 표시용)
+3. run meta 출력 규약
+   - stdout 한 줄에 `VTM_RUN_META::` + JSON 출력
+   - `mlflow_run_id`를 포함하면 UI/MLflow 연계가 쉬움
+4. flush/버퍼링 규약
+   - line 단위 실시간 반영을 위해 `print(..., flush=True)` 권장
+5. 종료 코드 규약
+   - exit code `0`이면 `completed`, 그 외는 `failed`로 처리됨
+
+예시:
+
+```python
+import json
+
+print("VTM_RUN_META::" + json.dumps({"mlflow_run_id": run_id}), flush=True)
+print(
+    "VTM_PROGRESS::" + json.dumps(
+        {"epoch": epoch, "total_epochs": epochs, "val_accuracy": val_acc, "device": "cuda:0"}
+    ),
+    flush=True,
+)
+```
